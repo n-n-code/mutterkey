@@ -51,9 +51,6 @@ ctest --test-dir "$BUILD_DIR" --output-on-failure
 bash scripts/run-valgrind.sh "$BUILD_DIR"
 ```
 
-- On Debian-family systems, install `libc6-dbg` first if Valgrind reports a
-  startup redirection failure in `ld-linux-x86-64.so.2`.
-
 - Run repo-maintained analyzers when they are available:
 
 ```bash
