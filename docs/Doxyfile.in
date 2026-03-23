@@ -49,6 +49,14 @@ HTML_OUTPUT            = html
 GENERATE_TREEVIEW      = YES
 FULL_SIDEBAR           = NO
 HTML_COLORSTYLE        = LIGHT
+HAVE_DOT               = NO
+CLASS_GRAPH            = NO
+COLLABORATION_GRAPH    = NO
+INCLUDE_GRAPH          = NO
+INCLUDED_BY_GRAPH      = NO
+CALL_GRAPH             = NO
+CALLER_GRAPH           = NO
+DIRECTORY_GRAPH        = NO
 
 GENERATE_LATEX         = NO
 GENERATE_XML           = NO
