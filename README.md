@@ -61,6 +61,7 @@ Optional developer tooling:
 - Qt 6 `Test`
 - `clang-tidy`
 - `clazy-standalone`
+- `doxygen`
 - `valgrind`
 - `libc6-dbg` on Debian-family systems so Valgrind Memcheck can start cleanly
 
@@ -317,6 +318,19 @@ cmake --build "$BUILD_DIR" --target clang-tidy
 cmake --build "$BUILD_DIR" --target clazy
 ```
 
+API documentation:
+
+```bash
+cmake --build "$BUILD_DIR" --target docs
+```
+
+Doxygen is an optional local dependency. When installed, the `docs` target
+generates HTML documentation under `"$BUILD_DIR"/docs/doxygen/html`. CI installs
+Doxygen and treats documentation warnings in repo-owned code as failures. The
+generated main page comes from `docs/mainpage.md`; keep that page focused on the
+repo-owned API surface instead of pointing Doxygen at the full release-facing
+README, which contains links to files outside the API-doc input set.
+
 Memory diagnostics:
 
 ```bash
@@ -362,8 +376,14 @@ Dependency metadata for the current imported snapshot lives in
 
 Notes:
 
+- `scripts/update-whisper.sh` requires a clean Git work tree before it will fetch or run subtree operations
+- `third_party/whisper.cpp` is maintained through the subtree workflow; use the helper instead of ad hoc vendor-directory replacement
 - the repo exports `compile_commands.json` by default
 - `lint` runs both analyzer targets
+- `docs` is available only when Doxygen is installed during configuration
+- the top-level install rules intentionally clear vendored `PUBLIC_HEADER`
+  metadata on `whisper` and `ggml` so Mutterkey can install the shared
+  libraries without inheriting upstream header-install warnings
 - the `valgrind` target runs the repo-owned Memcheck lane used for release readiness
 - tests are small headless `Qt Test` cases
 - `config` and `recordingnormalizer` currently have the main unit-test coverage because they contain the most deterministic logic without KDE session or device dependencies

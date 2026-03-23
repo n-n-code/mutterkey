@@ -19,6 +19,7 @@ option(MUTTERKEY_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer for repo-owned 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Multimedia)
 find_package(KF6GlobalAccel CONFIG REQUIRED)
 find_package(KF6GuiAddons CONFIG REQUIRED)
+find_package(Doxygen QUIET)
 
 set(MUTTERKEY_APP_SOURCES
     src/audio/audiorecorder.cpp
@@ -116,6 +117,26 @@ add_custom_target(valgrind
     VERBATIM
 )
 
+if(DOXYGEN_FOUND)
+    set(MUTTERKEY_DOXYGEN_OUTPUT_DIR "${CMAKE_BINARY_DIR}/docs/doxygen")
+    set(MUTTERKEY_DOXYGEN_CONFIG "${CMAKE_BINARY_DIR}/Doxyfile")
+    configure_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/docs/Doxyfile.in
+        ${MUTTERKEY_DOXYGEN_CONFIG}
+        @ONLY
+    )
+
+    add_custom_target(docs
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${MUTTERKEY_DOXYGEN_OUTPUT_DIR}
+        COMMAND ${DOXYGEN_EXECUTABLE} ${MUTTERKEY_DOXYGEN_CONFIG}
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        COMMENT "Generating API documentation with Doxygen"
+        VERBATIM
+    )
+else()
+    message(STATUS "Doxygen not found; the docs target will be unavailable")
+endif()
+
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/whisper.cpp/CMakeLists.txt")
     message(FATAL_ERROR "Vendored whisper.cpp dependency is missing from third_party/whisper.cpp")
 endif()
@@ -126,6 +147,11 @@ set(WHISPER_BUILD_SERVER OFF CACHE BOOL "" FORCE)
 set(WHISPER_SANITIZE_ADDRESS ${MUTTERKEY_ENABLE_ASAN} CACHE BOOL "" FORCE)
 set(WHISPER_SANITIZE_UNDEFINED ${MUTTERKEY_ENABLE_UBSAN} CACHE BOOL "" FORCE)
 add_subdirectory(third_party/whisper.cpp EXCLUDE_FROM_ALL)
+
+# Mutterkey ships the vendored shared libraries, but it does not install their
+# upstream public headers as part of its own package layout.
+set_target_properties(whisper ggml PROPERTIES PUBLIC_HEADER "")
+
 target_link_libraries(mutterkey PRIVATE whisper)
 
 install(TARGETS mutterkey RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
