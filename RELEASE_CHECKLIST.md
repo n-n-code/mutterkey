@@ -45,11 +45,37 @@ cmake --build "$BUILD_DIR" -j"$(nproc)"
 ctest --test-dir "$BUILD_DIR" --output-on-failure
 ```
 
+- Run the release-memory diagnostics lane:
+
+```bash
+bash scripts/run-valgrind.sh "$BUILD_DIR"
+```
+
 - Run repo-maintained analyzers when they are available:
 
 ```bash
 cmake --build "$BUILD_DIR" --target clang-tidy
 cmake --build "$BUILD_DIR" --target clazy
+```
+
+- If the release changes repo-owned public headers, Doxygen config, or docs/CI
+  wiring, also run:
+
+```bash
+cmake --build "$BUILD_DIR" --target docs
+```
+
+- Treat repo-owned Doxygen warnings as release blockers. Keep the Doxygen main
+  page in `docs/mainpage.md` API-focused instead of pointing Doxygen at the
+  full `README.md` unless the Doxygen input set is expanded deliberately.
+
+- For faster pre-release bug hunting, also consider a dedicated sanitizer build:
+
+```bash
+SANITIZER_BUILD_DIR="$(mktemp -d /tmp/mutterkey-sanitizer-build-XXXXXX)"
+cmake -S . -B "$SANITIZER_BUILD_DIR" -DCMAKE_BUILD_TYPE=Debug -DMUTTERKEY_ENABLE_ASAN=ON -DMUTTERKEY_ENABLE_UBSAN=ON
+cmake --build "$SANITIZER_BUILD_DIR" -j"$(nproc)"
+ctest --test-dir "$SANITIZER_BUILD_DIR" --output-on-failure
 ```
 
 - Validate headless startup:
@@ -78,10 +104,15 @@ cmake --install "$BUILD_DIR" --prefix "$INSTALL_DIR"
   - required `libwhisper` / `ggml` shared libraries
   - the desktop file under `share/applications`
   - license files under `share/licenses/mutterkey`
+- Do not expect vendored upstream public headers to be installed; Mutterkey's
+  install rules ship the runtime libraries but intentionally clear vendored
+  `PUBLIC_HEADER` metadata to avoid upstream header-install warnings.
 
 ## Documentation And User Flow
 
 - Review [README.md](README.md) for consistency with current behavior.
+- Review `docs/mainpage.md` and `docs/Doxyfile.in` if the release touched
+  repo-owned API docs or docs/CI wiring.
 - Confirm the documented recommended path is still the `systemd --user` service.
 - Confirm [contrib/mutterkey.service](contrib/mutterkey.service) matches the
   recommended installed-binary setup.

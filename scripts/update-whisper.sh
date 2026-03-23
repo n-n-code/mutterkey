@@ -20,6 +20,38 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     exit 1
 fi
 
+require_clean_worktree() {
+    if [[ -n "$(git status --short --untracked-files=all)" ]]; then
+        printf 'Refusing to update whisper.cpp: Git work tree is not clean.\n' >&2
+        printf 'Commit, stash, or discard local changes before running this script.\n' >&2
+        printf '\nCurrent work tree state:\n' >&2
+        git status --short --untracked-files=all >&2
+        exit 1
+    fi
+}
+
+require_clean_worktree
+
+subtree_prefix="third_party/whisper.cpp"
+
+has_existing_subtree() {
+    [[ -n "$(git log --grep="^git-subtree-dir: ${subtree_prefix}\$" -n 1 --format=%H)" ]]
+}
+
+require_subtree_bootstrap() {
+    printf "Refusing to update whisper.cpp with git subtree.\n" >&2
+    printf "'%s' exists, but this repository history does not show a prior 'git subtree add' for that prefix.\n" "$subtree_prefix" >&2
+    printf "The current vendored copy was imported as a plain directory, so 'git subtree pull' cannot attach to it.\n" >&2
+    printf "\nBootstrap options:\n" >&2
+    printf "1. remove the existing vendored directory in a dedicated commit\n" >&2
+    printf "2. rerun: bash scripts/update-whisper.sh %s\n" "$upstream_ref" >&2
+    printf "\nExample:\n" >&2
+    printf "  git rm -r %s\n" "$subtree_prefix" >&2
+    printf "  git commit -m 'vendor: remove pre-subtree whisper.cpp snapshot'\n" >&2
+    printf "  bash scripts/update-whisper.sh %s\n" "$upstream_ref" >&2
+    exit 1
+}
+
 if ! git remote get-url "$upstream_remote" >/dev/null 2>&1; then
     printf 'Adding remote %s -> %s\n' "$upstream_remote" "$upstream_url"
     git remote add "$upstream_remote" "$upstream_url"
@@ -28,12 +60,15 @@ fi
 printf 'Fetching %s from %s\n' "$upstream_ref" "$upstream_remote"
 git fetch "$upstream_remote" "$upstream_ref"
 
-if [[ -d third_party/whisper.cpp ]]; then
+if [[ -d "$subtree_prefix" ]]; then
+    if ! has_existing_subtree; then
+        require_subtree_bootstrap
+    fi
     printf 'Updating vendored whisper.cpp subtree at %s\n' "$upstream_ref"
-    git subtree pull --prefix=third_party/whisper.cpp "$upstream_remote" "$upstream_ref" --squash
+    git subtree pull --prefix="$subtree_prefix" "$upstream_remote" "$upstream_ref" --squash
 else
     printf 'Adding vendored whisper.cpp subtree at %s\n' "$upstream_ref"
-    git subtree add --prefix=third_party/whisper.cpp "$upstream_remote" "$upstream_ref" --squash
+    git subtree add --prefix="$subtree_prefix" "$upstream_remote" "$upstream_ref" --squash
 fi
 
 cat <<'EOF'

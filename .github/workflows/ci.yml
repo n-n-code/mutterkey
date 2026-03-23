@@ -36,6 +36,7 @@ jobs:
           apt-get install -y --no-install-recommends \
             ca-certificates \
             cmake \
+            doxygen \
             g++ \
             git \
             ninja-build \
@@ -53,6 +54,9 @@ jobs:
 
       - name: Build
         run: cmake --build build
+
+      - name: Generate API docs
+        run: cmake --build build --target docs
 
       - name: Run tests
         run: ctest --test-dir build --output-on-failure
