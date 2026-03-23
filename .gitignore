@@ -1,0 +1,13 @@
+/.venv/
+/.cache/
+/build/
+/build-cmake/
+/third_party/whisper.cpp/build/
+/third_party/whisper.cpp/build-*/
+/Makefile
+*.o
+*.obj
+*.moc
+*.moc.cpp
+__pycache__/
+*.pyc

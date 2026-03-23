@@ -1,0 +1,23 @@
+{
+  "shortcut": {
+    "component_unique": "mutterkey",
+    "component_friendly": "Mutterkey",
+    "action_unique": "push_to_talk",
+    "action_friendly": "Push to Talk",
+    "sequence": "F8"
+  },
+  "audio": {
+    "sample_rate": 16000,
+    "channels": 1,
+    "minimum_seconds": 0.25,
+    "device_id": ""
+  },
+  "transcriber": {
+    "model_path": "/absolute/path/to/ggml-base.en.bin",
+    "language": "en",
+    "translate": false,
+    "threads": 0,
+    "warmup_on_start": false
+  },
+  "log_level": "INFO"
+}

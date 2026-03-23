@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  hygiene:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run release hygiene checks
+        run: bash scripts/check-release-hygiene.sh
+
+  build-test:
+    runs-on: ubuntu-24.04
+    needs: hygiene
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            g++ \
+            ninja-build \
+            pkg-config \
+            libgl-dev \
+            libopengl-dev \
+            qt6-base-dev \
+            qt6-base-dev-tools \
+            qt6-multimedia-dev \
+            libkf6globalaccel-dev \
+            libkf6guiaddons-dev
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Validate headless CLI startup
+        run: QT_QPA_PLATFORM=offscreen ./build/mutterkey --help

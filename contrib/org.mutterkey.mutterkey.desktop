@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Mutterkey
+GenericName=Push-to-talk transcription
+Comment=Push-to-talk transcription daemon for KDE Plasma
+Exec=mutterkey daemon
+Terminal=false
+NoDisplay=true
+Categories=Utility;AudioVideo;Audio;
+StartupNotify=false
+X-DBUS-ServiceName=org.mutterkey.mutterkey
