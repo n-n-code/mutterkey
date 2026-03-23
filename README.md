@@ -322,7 +322,7 @@ Notes:
 - `lint` runs both analyzer targets
 - tests are small headless `Qt Test` cases
 - `config` and `recordingnormalizer` currently have the main unit-test coverage because they contain the most deterministic logic without KDE session or device dependencies
-- GitHub Actions CI runs the hygiene check plus configure/build/test on Ubuntu 24.04
+- GitHub Actions CI runs the hygiene job on Ubuntu 24.04 and the configure/build/test job in a Debian Trixie container because the needed KF6 dev packages are not available on the stock Ubuntu 24.04 runner image
 - runtime validation for microphone capture, clipboard behavior, and KDE global
   shortcut registration still relies on `once`, `daemon`, and `diagnose`
 - keep `third_party/whisper.cpp` treated as vendored code unless a task

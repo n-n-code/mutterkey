@@ -23,6 +23,8 @@ jobs:
   build-test:
     runs-on: ubuntu-24.04
     needs: hygiene
+    container:
+      image: debian:trixie
 
     steps:
       - name: Check out repository
@@ -30,10 +32,12 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates \
             cmake \
             g++ \
+            git \
             ninja-build \
             pkg-config \
             libgl-dev \
