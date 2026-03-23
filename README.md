@@ -349,8 +349,6 @@ Valgrind and sanitizers have different roles:
 - use `bash scripts/run-valgrind.sh "$BUILD_DIR"` or the `valgrind` target as the slower release-readiness gate
 - the default Valgrind lane stays deterministic and headless: `configtest`, `recordingnormalizertest`, and `mutterkey --help`
 - the default Valgrind lane intentionally does not run live microphone capture, clipboard-heavy flows, or KDE hotkey/service integration
-- on Debian-family systems, install `libc6-dbg` if Valgrind aborts during startup with a dynamic-linker redirection error
-- if you need suppressions for local platform noise, set `MUTTERKEY_VALGRIND_SUPPRESSIONS=/path/to/file.supp`
 
 Notes for contributors:
 
