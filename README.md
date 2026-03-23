@@ -1,5 +1,6 @@
 # Mutterkey
-
+[![Actions Status](https://github.com/n-n-code/mutterkey/workflows/CI/badge.svg)](https://github.com/n-n-code/mutterkey/actions)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 ## Overview
 
 `Mutterkey` is a native `C++ + Qt 6` push-to-talk transcription tool for
