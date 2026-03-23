@@ -20,6 +20,18 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     exit 1
 fi
 
+require_clean_worktree() {
+    if [[ -n "$(git status --short --untracked-files=all)" ]]; then
+        printf 'Refusing to update whisper.cpp: Git work tree is not clean.\n' >&2
+        printf 'Commit, stash, or discard local changes before running this script.\n' >&2
+        printf '\nCurrent work tree state:\n' >&2
+        git status --short --untracked-files=all >&2
+        exit 1
+    fi
+}
+
+require_clean_worktree
+
 if ! git remote get-url "$upstream_remote" >/dev/null 2>&1; then
     printf 'Adding remote %s -> %s\n' "$upstream_remote" "$upstream_url"
     git remote add "$upstream_remote" "$upstream_url"

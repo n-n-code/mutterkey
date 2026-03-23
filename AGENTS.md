@@ -39,8 +39,10 @@ This repository is intentionally kept minimal:
 - `contrib/mutterkey.service`: example user service
 - `contrib/org.mutterkey.mutterkey.desktop`: hidden desktop entry used for desktop identity/integration
 - `scripts/check-release-hygiene.sh`: repo hygiene checks for publication-facing content
+- `scripts/run-valgrind.sh`: deterministic Valgrind Memcheck runner for release-readiness checks
 - `scripts/update-whisper.sh`: `git subtree` helper for updating vendored `whisper.cpp`
 - `.github/workflows/ci.yml`: Linux configure/build/test and hygiene CI
+- `.github/workflows/release-checks.yml`: release-scoped debug build, tests, and Valgrind Memcheck workflow
 - `LICENSE`: root MIT license for repo-owned source
 - `THIRD_PARTY_NOTICES.md`: third-party licensing/provenance notes
 - `third_party/whisper.cpp.UPSTREAM.md`: recorded metadata for the current vendored `whisper.cpp` snapshot
@@ -90,6 +92,8 @@ Notes:
 - A small `Qt Test` + `CTest` suite exists for config loading and audio normalization, including malformed JSON, wrong-type config inputs, and recording-normalizer edge cases
 - Config loading is intentionally forgiving: invalid runtime values fall back to defaults and log warnings
 - Use `ctest --test-dir "$BUILD_DIR" --output-on-failure` for changes that affect covered code
+- Use `bash scripts/run-valgrind.sh "$BUILD_DIR"` or `cmake --build "$BUILD_DIR" --target valgrind` when validating memory behavior for release readiness or after fixing memory-lifetime issues
+- On Debian-family systems, install `libc6-dbg` if Valgrind fails at startup with a `ld-linux` / mandatory redirection error
 - Use `cmake --build "$BUILD_DIR" --target clang-tidy` after C++ changes when static-analysis noise is likely to matter
 - Use `cmake --build "$BUILD_DIR" --target clazy` after Qt-facing changes when `clazy-standalone` is available
 - Use `cmake --build "$BUILD_DIR" --target lint` when you want the repo's full static-analysis pass in one command
@@ -99,11 +103,14 @@ Notes:
 ## Tooling Best Practices
 
 - Treat `clang-tidy` and `clazy` as repo-maintained checks, not optional extras; if a change introduces new warnings in repo-owned code, fix them or explain why they are being deferred
+- Treat Valgrind Memcheck as the release memory gate and ASan/UBSan as the faster developer complements; they overlap, but they are not interchangeable
 - Treat the release-hygiene script and GitHub CI workflow as repo-maintained checks too; keep them passing when build inputs, docs, or repository metadata change
+- Keep the default Valgrind lane deterministic and headless: prefer `configtest`, `recordingnormalizertest`, and `mutterkey --help` over microphone, clipboard, or KGlobalAccel-heavy paths unless the task is specifically about those integrations
 - The release-hygiene script intentionally ignores generated build trees while scanning for machine-specific home-directory paths and absolute Markdown links, then reports generated-artifact roots separately; if it flags `./build`, remove the repo-local build directory rather than weakening the content checks
 - Keep analyzer fixes targeted to `src/` and `tests/`; do not churn `third_party/` or generated Qt autogen output to satisfy tooling
 - Reconfigure the build directory after installing new tools so cached `find_program()` results are refreshed
 - Prefer fixing the code over weakening `.clang-tidy` or the Clazy check set; only relax tool config when the warning is clearly low-value for this repo
+- Do not add broad Valgrind suppressions by default; only add narrow suppressions after reproducing stable third-party noise and keep them clearly scoped
 - When adding tests, prefer small `Qt Test` cases that run headlessly under `CTest` and avoid microphone, clipboard, or KDE session dependencies unless the task is specifically integration-focused
 - For tool-driven cleanups, preserve the existing design and behavior; do not perform broad rewrites just to satisfy style-oriented recommendations
 
@@ -183,8 +190,10 @@ Typical model location:
 - Verify with a fresh CMake build when the change affects compilation or linkage
 - Run `ctest` when touching covered code in `src/config.*` or `src/audio/recordingnormalizer.*`, and extend the deterministic headless tests when practical
 - Prefer expanding tests around pure parsing, value normalization, and other environment-independent logic before adding KDE-session or device-heavy coverage
+- Use `-DMUTTERKEY_ENABLE_ASAN=ON` and `-DMUTTERKEY_ENABLE_UBSAN=ON` for fast iteration on memory and UB bugs, and use the repo-owned Valgrind lane as the slower release-focused confirmation step
 - Run `clang-tidy` and `clazy` targets for non-trivial C++/Qt changes when the tools are installed in the environment
 - Prefer the `lint` target for a full pre-handoff analyzer pass, and use the individual analyzer targets when iterating on one class of warnings
+- Run `bash scripts/run-valgrind.sh "$BUILD_DIR"` before handoff when the task is specifically about memory, ownership, lifetime, shutdown, or release hardening
 - Run `bash scripts/check-release-hygiene.sh` before handoff when the task touches publication-facing files or repository metadata
 - Do not leave generated artifacts in the repository tree at the end of the task
 - Do not assume every workspace copy is an initialized git repository; if `git` commands fail, continue with file-based validation and mention the limitation in the final response

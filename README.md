@@ -61,6 +61,8 @@ Optional developer tooling:
 - Qt 6 `Test`
 - `clang-tidy`
 - `clazy-standalone`
+- `valgrind`
+- `libc6-dbg` on Debian-family systems so Valgrind Memcheck can start cleanly
 
 The repository vendors `whisper.cpp`, but it does not bundle Whisper model
 files. Any model file you download separately may be subject to its own license
@@ -315,6 +317,27 @@ cmake --build "$BUILD_DIR" --target clang-tidy
 cmake --build "$BUILD_DIR" --target clazy
 ```
 
+Memory diagnostics:
+
+```bash
+BUILD_DIR_ASAN="$(mktemp -d /tmp/mutterkey-asan-build-XXXXXX)"
+cmake -S . -B "$BUILD_DIR_ASAN" -DCMAKE_BUILD_TYPE=Debug -DMUTTERKEY_ENABLE_ASAN=ON -DMUTTERKEY_ENABLE_UBSAN=ON
+cmake --build "$BUILD_DIR_ASAN" -j"$(nproc)"
+ctest --test-dir "$BUILD_DIR_ASAN" --output-on-failure
+
+bash scripts/run-valgrind.sh "$BUILD_DIR"
+cmake --build "$BUILD_DIR" --target valgrind
+```
+
+Valgrind and sanitizers have different roles:
+
+- use `MUTTERKEY_ENABLE_ASAN` / `MUTTERKEY_ENABLE_UBSAN` for fast developer iteration and CI-friendly memory or UB checks
+- use `bash scripts/run-valgrind.sh "$BUILD_DIR"` or the `valgrind` target as the slower release-readiness gate
+- the default Valgrind lane stays deterministic and headless: `configtest`, `recordingnormalizertest`, and `mutterkey --help`
+- the default Valgrind lane intentionally does not run live microphone capture, clipboard-heavy flows, or KDE hotkey/service integration
+- on Debian-family systems, install `libc6-dbg` if Valgrind aborts during startup with a dynamic-linker redirection error
+- if you need suppressions for local platform noise, set `MUTTERKEY_VALGRIND_SUPPRESSIONS=/path/to/file.supp`
+
 Notes for contributors:
 
 - prefer an out-of-tree build so the repository stays clean
@@ -341,9 +364,11 @@ Notes:
 
 - the repo exports `compile_commands.json` by default
 - `lint` runs both analyzer targets
+- the `valgrind` target runs the repo-owned Memcheck lane used for release readiness
 - tests are small headless `Qt Test` cases
 - `config` and `recordingnormalizer` currently have the main unit-test coverage because they contain the most deterministic logic without KDE session or device dependencies
 - GitHub Actions CI runs the hygiene job on Ubuntu 24.04 and the configure/build/test job in a Debian Trixie container because the needed KF6 dev packages are not available on the stock Ubuntu 24.04 runner image
+- GitHub Actions release checks run a separate Valgrind Memcheck lane on manual dispatch and `v*` tags so normal PR CI stays faster
 - runtime validation for microphone capture, clipboard behavior, and KDE global
   shortcut registration still relies on `once`, `daemon`, and `diagnose`
 - keep `third_party/whisper.cpp` treated as vendored code unless a task

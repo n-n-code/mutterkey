@@ -1,0 +1,54 @@
+name: Release Checks
+
+on:
+  workflow_dispatch:
+  push:
+    # Run automatically for version-style release tags such as v1.0.0.
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  release-checks:
+    runs-on: ubuntu-24.04
+    container:
+      image: debian:trixie
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install build and diagnostics dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            bash \
+            ca-certificates \
+            cmake \
+            g++ \
+            git \
+            libc6-dbg \
+            ninja-build \
+            pkg-config \
+            valgrind \
+            libgl-dev \
+            libopengl-dev \
+            qt6-base-dev \
+            qt6-base-dev-tools \
+            qt6-multimedia-dev \
+            libkf6globalaccel-dev \
+            libkf6guiaddons-dev
+
+      - name: Configure debug build
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Run Valgrind Memcheck lane
+        run: bash scripts/run-valgrind.sh build

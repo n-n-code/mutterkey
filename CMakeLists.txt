@@ -13,6 +13,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+option(MUTTERKEY_ENABLE_ASAN "Enable AddressSanitizer for repo-owned code and vendored whisper.cpp" OFF)
+option(MUTTERKEY_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer for repo-owned code and vendored whisper.cpp" OFF)
+
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Multimedia)
 find_package(KF6GlobalAccel CONFIG REQUIRED)
 find_package(KF6GuiAddons CONFIG REQUIRED)
@@ -48,6 +51,33 @@ set_target_properties(mutterkey PROPERTIES
     INSTALL_RPATH "$ORIGIN/../lib"
 )
 
+function(mutterkey_enable_sanitizers target_name)
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+        message(WARNING "Sanitizers were requested, but ${CMAKE_CXX_COMPILER_ID} is not configured for repo-owned sanitizer flags")
+        return()
+    endif()
+
+    set(sanitizer_compile_flags "")
+    set(sanitizer_link_flags "")
+
+    if(MUTTERKEY_ENABLE_ASAN)
+        list(APPEND sanitizer_compile_flags -fsanitize=address -fno-omit-frame-pointer)
+        list(APPEND sanitizer_link_flags -fsanitize=address)
+    endif()
+
+    if(MUTTERKEY_ENABLE_UBSAN)
+        list(APPEND sanitizer_compile_flags -fsanitize=undefined)
+        list(APPEND sanitizer_link_flags -fsanitize=undefined)
+    endif()
+
+    if(sanitizer_compile_flags)
+        target_compile_options(${target_name} PRIVATE ${sanitizer_compile_flags})
+        target_link_options(${target_name} PRIVATE ${sanitizer_link_flags})
+    endif()
+endfunction()
+
+mutterkey_enable_sanitizers(mutterkey)
+
 set(MUTTERKEY_CLAZY_CHECKS "level0" CACHE STRING "Checks passed to clazy-standalone")
 
 find_program(MUTTERKEY_CLANG_TIDY_BIN NAMES clang-tidy)
@@ -80,6 +110,12 @@ add_custom_target(clazy
 add_custom_target(lint)
 add_dependencies(lint clang-tidy clazy)
 
+add_custom_target(valgrind
+    COMMAND ${CMAKE_COMMAND} -E env QT_QPA_PLATFORM=offscreen bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run-valgrind.sh ${CMAKE_BINARY_DIR}
+    USES_TERMINAL
+    VERBATIM
+)
+
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/whisper.cpp/CMakeLists.txt")
     message(FATAL_ERROR "Vendored whisper.cpp dependency is missing from third_party/whisper.cpp")
 endif()
@@ -87,6 +123,8 @@ endif()
 set(WHISPER_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(WHISPER_BUILD_SERVER OFF CACHE BOOL "" FORCE)
+set(WHISPER_SANITIZE_ADDRESS ${MUTTERKEY_ENABLE_ASAN} CACHE BOOL "" FORCE)
+set(WHISPER_SANITIZE_UNDEFINED ${MUTTERKEY_ENABLE_UBSAN} CACHE BOOL "" FORCE)
 add_subdirectory(third_party/whisper.cpp EXCLUDE_FROM_ALL)
 target_link_libraries(mutterkey PRIVATE whisper)
 

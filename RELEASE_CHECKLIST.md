@@ -45,11 +45,29 @@ cmake --build "$BUILD_DIR" -j"$(nproc)"
 ctest --test-dir "$BUILD_DIR" --output-on-failure
 ```
 
+- Run the release-memory diagnostics lane:
+
+```bash
+bash scripts/run-valgrind.sh "$BUILD_DIR"
+```
+
+- On Debian-family systems, install `libc6-dbg` first if Valgrind reports a
+  startup redirection failure in `ld-linux-x86-64.so.2`.
+
 - Run repo-maintained analyzers when they are available:
 
 ```bash
 cmake --build "$BUILD_DIR" --target clang-tidy
 cmake --build "$BUILD_DIR" --target clazy
+```
+
+- For faster pre-release bug hunting, also consider a dedicated sanitizer build:
+
+```bash
+SANITIZER_BUILD_DIR="$(mktemp -d /tmp/mutterkey-sanitizer-build-XXXXXX)"
+cmake -S . -B "$SANITIZER_BUILD_DIR" -DCMAKE_BUILD_TYPE=Debug -DMUTTERKEY_ENABLE_ASAN=ON -DMUTTERKEY_ENABLE_UBSAN=ON
+cmake --build "$SANITIZER_BUILD_DIR" -j"$(nproc)"
+ctest --test-dir "$SANITIZER_BUILD_DIR" --output-on-failure
 ```
 
 - Validate headless startup:
