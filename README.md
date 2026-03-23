@@ -19,6 +19,7 @@ Current direction:
 - local-only transcription
 - CLI/service-first operation
 - no GUI yet
+- minimal and developer-oriented rather than a hardened end-user security product
 
 Recommended startup path:
 
@@ -68,6 +69,26 @@ or usage terms.
 If CMake fails before compilation starts, the most common cause is missing Qt 6
 development packages for `Core`, `Gui`, `Multimedia`, or KDE Frameworks
 packages for `KF6GlobalAccel` / `KF6GuiAddons`.
+
+## Privacy And Security Notes
+
+Mutterkey is designed to keep transcription local to the machine:
+
+- microphone audio is captured through Qt Multimedia
+- transcription runs in-process through the vendored `whisper.cpp` backend
+- the project does not send audio or transcript text to a remote service
+
+That does not make it a hardened privacy boundary:
+
+- transcript text is written to the clipboard, so other local software or desktop
+  integrations with clipboard access may still observe it
+- service logs are intended for operational status and troubleshooting, not as a
+  secure audit store
+- the project currently targets KDE Plasma and assumes a normal desktop user
+  session with microphone, clipboard, and `KGlobalAccel` access
+
+If you need stronger isolation, treat Mutterkey as a convenience tool for a
+trusted local session, not as a sandboxed dictation or secret-handling system.
 
 ## Quick Start
 

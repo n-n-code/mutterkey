@@ -121,10 +121,7 @@ void MutterkeyService::onTranscriptionReady(const QString &text)
     }
 
     const QString trimmedText = text.trimmed();
-    qCInfo(serviceLog) << "Transcription ready with"
-                       << trimmedText.size()
-                       << "characters:"
-                       << trimmedText.left(120);
+    qCInfo(serviceLog) << "Transcription ready with" << trimmedText.size() << "characters";
 
     ++m_transcriptionsCompleted;
     if (!m_clipboardWriter.copy(trimmedText)) {
