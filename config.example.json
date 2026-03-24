@@ -13,7 +13,7 @@
     "device_id": ""
   },
   "transcriber": {
-    "model_path": "/absolute/path/to/ggml-base.en.bin",
+    "model_path": "/path/to/ggml-base.en.bin",
     "language": "en",
     "translate": false,
     "threads": 0,

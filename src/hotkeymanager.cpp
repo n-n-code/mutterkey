@@ -52,11 +52,11 @@ QKeySequence parseKeySequence(const QString &sequenceText)
     if (trimmedSequence.size() == 1) {
         const QChar character = trimmedSequence.front();
         if (!character.isNull() && !character.isSpace()) {
-            return QKeySequence(character.unicode());
+            return QKeySequence(character.unicode()); // NOLINT(modernize-return-braced-init-list)
         }
     }
 
-    return QKeySequence(sequenceText);
+    return QKeySequence(sequenceText); // NOLINT(modernize-return-braced-init-list)
 }
 
 QString describeConflicts(const QKeySequence &requestedSequence)

@@ -1,11 +1,18 @@
 #include "config.h"
 
+#include <array>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLoggingCategory>
+#include <QSaveFile>
 #include <QStandardPaths>
+
+extern "C" {
+#include <whisper.h>
+}
 
 Q_LOGGING_CATEGORY(configLog, "mutterkey.config")
 
@@ -60,6 +67,66 @@ QString sanitizedNonEmptyString(const QString &value)
 {
     QString trimmedValue = value.trimmed();
     return trimmedValue;
+}
+
+QString normalizedLanguageValue(const QString &value)
+{
+    return value.trimmed().toLower();
+}
+
+bool resolveWhisperLanguage(const QString &value, QString *resolvedLanguage)
+{
+    const QString normalizedValue = normalizedLanguageValue(value);
+    if (normalizedValue.isEmpty()) {
+        return false;
+    }
+
+    if (normalizedValue == QStringLiteral("auto")) {
+        if (resolvedLanguage != nullptr) {
+            *resolvedLanguage = normalizedValue;
+        }
+        return true;
+    }
+
+    for (int languageId = 0; languageId <= whisper_lang_max_id(); ++languageId) {
+        const char *languageCode = whisper_lang_str(languageId);
+        const char *languageName = whisper_lang_str_full(languageId);
+        if (languageCode == nullptr) {
+            continue;
+        }
+
+        if (normalizedValue == QString::fromUtf8(languageCode)
+            || (languageName != nullptr && normalizedValue == QString::fromUtf8(languageName))) {
+            if (resolvedLanguage != nullptr) {
+                *resolvedLanguage = QString::fromUtf8(languageCode);
+            }
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool parseBoolValue(const QString &value, bool *parsedValue)
+{
+    if (parsedValue == nullptr) {
+        return false;
+    }
+
+    const QString normalizedValue = value.trimmed().toLower();
+    if (normalizedValue == QStringLiteral("true") || normalizedValue == QStringLiteral("1")
+        || normalizedValue == QStringLiteral("yes") || normalizedValue == QStringLiteral("on")) {
+        *parsedValue = true;
+        return true;
+    }
+
+    if (normalizedValue == QStringLiteral("false") || normalizedValue == QStringLiteral("0")
+        || normalizedValue == QStringLiteral("no") || normalizedValue == QStringLiteral("off")) {
+        *parsedValue = false;
+        return true;
+    }
+
+    return false;
 }
 
 int validatedAudioSampleRate(const QString &path, int sampleRate)
@@ -132,6 +199,177 @@ bool isSupportedLogLevel(const QString &logLevel)
     return kAllowedLevels.contains(logLevel);
 }
 
+bool setShortcutSequence(AppConfig *config, const QString &value, QString *errorMessage)
+{
+    const QString trimmedValue = sanitizedNonEmptyString(value);
+    if (trimmedValue.isEmpty()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("shortcut.sequence may not be empty");
+        }
+        return false;
+    }
+
+    config->shortcut.sequence = trimmedValue;
+    return true;
+}
+
+bool setAudioSampleRate(AppConfig *config, const QString &value, QString *errorMessage)
+{
+    bool ok = false;
+    const int sampleRate = value.trimmed().toInt(&ok);
+    if (!ok || sampleRate <= 0) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("audio.sample_rate must be greater than 0");
+        }
+        return false;
+    }
+
+    config->audio.sampleRate = sampleRate;
+    return true;
+}
+
+bool setAudioChannels(AppConfig *config, const QString &value, QString *errorMessage)
+{
+    bool ok = false;
+    const int channels = value.trimmed().toInt(&ok);
+    if (!ok || channels <= 0 || channels > kMaxAudioChannels) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("audio.channels must be between 1 and 8");
+        }
+        return false;
+    }
+
+    config->audio.channels = channels;
+    return true;
+}
+
+bool setAudioMinimumSeconds(AppConfig *config, const QString &value, QString *errorMessage)
+{
+    bool ok = false;
+    const double minimumSeconds = value.trimmed().toDouble(&ok);
+    if (!ok || minimumSeconds < 0.0) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("audio.minimum_seconds must be 0 or greater");
+        }
+        return false;
+    }
+
+    config->audio.minimumSeconds = minimumSeconds;
+    return true;
+}
+
+bool setAudioDeviceId(AppConfig *config, const QString &value, QString *)
+{
+    config->audio.deviceId = value.trimmed();
+    return true;
+}
+
+bool setModelPath(AppConfig *config, const QString &value, QString *errorMessage)
+{
+    const QString trimmedValue = sanitizedNonEmptyString(value);
+    if (trimmedValue.isEmpty()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("transcriber.model_path may not be empty");
+        }
+        return false;
+    }
+
+    config->transcriber.modelPath = trimmedValue;
+    return true;
+}
+
+bool setLanguage(AppConfig *config, const QString &value, QString *errorMessage)
+{
+    QString resolvedLanguage;
+    if (!resolveWhisperLanguage(value, &resolvedLanguage)) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("transcriber.language must be \"auto\" or a supported Whisper language code");
+        }
+        return false;
+    }
+
+    config->transcriber.language = resolvedLanguage;
+    return true;
+}
+
+bool setTranslate(AppConfig *config, const QString &value, QString *errorMessage)
+{
+    bool translate = false;
+    if (!parseBoolValue(value, &translate)) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("transcriber.translate must be a boolean value");
+        }
+        return false;
+    }
+
+    config->transcriber.translate = translate;
+    return true;
+}
+
+bool setThreads(AppConfig *config, const QString &value, QString *errorMessage)
+{
+    bool ok = false;
+    const int threads = value.trimmed().toInt(&ok);
+    if (!ok || threads < 0) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("transcriber.threads must be 0 or greater");
+        }
+        return false;
+    }
+
+    config->transcriber.threads = threads;
+    return true;
+}
+
+bool setWarmupOnStart(AppConfig *config, const QString &value, QString *errorMessage)
+{
+    bool warmupOnStart = false;
+    if (!parseBoolValue(value, &warmupOnStart)) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("transcriber.warmup_on_start must be a boolean value");
+        }
+        return false;
+    }
+
+    config->transcriber.warmupOnStart = warmupOnStart;
+    return true;
+}
+
+bool setLogLevel(AppConfig *config, const QString &value, QString *errorMessage)
+{
+    const QString logLevel = normalizedLogLevel(value);
+    if (!isSupportedLogLevel(logLevel)) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("log_level must be one of DEBUG, INFO, WARNING, ERROR");
+        }
+        return false;
+    }
+
+    config->logLevel = logLevel;
+    return true;
+}
+
+using ConfigSetter = bool (*)(AppConfig *config, const QString &value, QString *errorMessage);
+
+struct ConfigKeyHandler {
+    QLatin1StringView key;
+    ConfigSetter setter;
+};
+
+constexpr std::array kConfigKeyHandlers{
+    ConfigKeyHandler{.key = QLatin1StringView("shortcut.sequence"), .setter = &setShortcutSequence},
+    ConfigKeyHandler{.key = QLatin1StringView("audio.sample_rate"), .setter = &setAudioSampleRate},
+    ConfigKeyHandler{.key = QLatin1StringView("audio.channels"), .setter = &setAudioChannels},
+    ConfigKeyHandler{.key = QLatin1StringView("audio.minimum_seconds"), .setter = &setAudioMinimumSeconds},
+    ConfigKeyHandler{.key = QLatin1StringView("audio.device_id"), .setter = &setAudioDeviceId},
+    ConfigKeyHandler{.key = QLatin1StringView("transcriber.model_path"), .setter = &setModelPath},
+    ConfigKeyHandler{.key = QLatin1StringView("transcriber.language"), .setter = &setLanguage},
+    ConfigKeyHandler{.key = QLatin1StringView("transcriber.translate"), .setter = &setTranslate},
+    ConfigKeyHandler{.key = QLatin1StringView("transcriber.threads"), .setter = &setThreads},
+    ConfigKeyHandler{.key = QLatin1StringView("transcriber.warmup_on_start"), .setter = &setWarmupOnStart},
+    ConfigKeyHandler{.key = QLatin1StringView("log_level"), .setter = &setLogLevel},
+};
+
 } // namespace
 
 QString defaultConfigPath()
@@ -145,10 +383,16 @@ QString defaultModelPath()
     return QDir(defaultModelDirectory()).filePath(QStringLiteral("ggml-base.en.bin"));
 }
 
-AppConfig loadConfig(const QString &path, QString *errorMessage)
+AppConfig defaultAppConfig()
 {
     AppConfig config;
     config.transcriber.modelPath = defaultModelPath();
+    return config;
+}
+
+AppConfig loadConfig(const QString &path, QString *errorMessage)
+{
+    AppConfig config = defaultAppConfig();
     QFile file(path);
     if (!file.exists()) {
         return config;
@@ -204,6 +448,16 @@ AppConfig loadConfig(const QString &path, QString *errorMessage)
         config.transcriber.modelPath = modelPath;
     }
     config.transcriber.language = readString(transcriber, QStringLiteral("language"), config.transcriber.language);
+    QString resolvedLanguage;
+    if (resolveWhisperLanguage(config.transcriber.language, &resolvedLanguage)) {
+        config.transcriber.language = resolvedLanguage;
+    } else {
+        warnAboutInvalidValue(path,
+                              QStringLiteral("transcriber.language"),
+                              QStringLiteral("unsupported Whisper language"),
+                              defaultAppConfig().transcriber.language);
+        config.transcriber.language = defaultAppConfig().transcriber.language;
+    }
     config.transcriber.translate = readBool(transcriber, QStringLiteral("translate"), config.transcriber.translate);
     config.transcriber.threads = validatedThreads(path, readInt(transcriber, QStringLiteral("threads"), config.transcriber.threads));
     config.transcriber.warmupOnStart =
@@ -221,4 +475,102 @@ AppConfig loadConfig(const QString &path, QString *errorMessage)
 
     qCInfo(configLog) << "Loaded config from" << path;
     return config;
+}
+
+QByteArray serializeConfig(const AppConfig &config)
+{
+    QJsonObject shortcut;
+    shortcut.insert(QStringLiteral("component_unique"), config.shortcut.componentUnique);
+    shortcut.insert(QStringLiteral("component_friendly"), config.shortcut.componentFriendly);
+    shortcut.insert(QStringLiteral("action_unique"), config.shortcut.actionUnique);
+    shortcut.insert(QStringLiteral("action_friendly"), config.shortcut.actionFriendly);
+    shortcut.insert(QStringLiteral("sequence"), config.shortcut.sequence);
+
+    QJsonObject audio;
+    audio.insert(QStringLiteral("sample_rate"), config.audio.sampleRate);
+    audio.insert(QStringLiteral("channels"), config.audio.channels);
+    audio.insert(QStringLiteral("minimum_seconds"), config.audio.minimumSeconds);
+    audio.insert(QStringLiteral("device_id"), config.audio.deviceId);
+
+    QJsonObject transcriber;
+    transcriber.insert(QStringLiteral("model_path"), config.transcriber.modelPath);
+    transcriber.insert(QStringLiteral("language"), config.transcriber.language);
+    transcriber.insert(QStringLiteral("translate"), config.transcriber.translate);
+    transcriber.insert(QStringLiteral("threads"), config.transcriber.threads);
+    transcriber.insert(QStringLiteral("warmup_on_start"), config.transcriber.warmupOnStart);
+
+    QJsonObject root;
+    root.insert(QStringLiteral("shortcut"), shortcut);
+    root.insert(QStringLiteral("audio"), audio);
+    root.insert(QStringLiteral("transcriber"), transcriber);
+    root.insert(QStringLiteral("log_level"), config.logLevel);
+
+    return QJsonDocument(root).toJson(QJsonDocument::Indented);
+}
+
+bool saveConfig(const QString &path, const AppConfig &config, QString *errorMessage)
+{
+    const QFileInfo configFileInfo(path);
+    QDir directory;
+    if (!directory.mkpath(configFileInfo.absolutePath())) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Could not create config directory: %1").arg(configFileInfo.absolutePath());
+        }
+        return false;
+    }
+
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Could not open config file for writing: %1").arg(path);
+        }
+        return false;
+    }
+
+    if (file.write(serializeConfig(config)) < 0) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Could not write config file: %1").arg(path);
+        }
+        return false;
+    }
+
+    if (!file.commit()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Could not commit config file: %1").arg(path);
+        }
+        return false;
+    }
+
+    return true;
+}
+
+QStringList supportedConfigKeys()
+{
+    QStringList keys;
+    keys.reserve(std::size(kConfigKeyHandlers));
+    for (const ConfigKeyHandler &handler : kConfigKeyHandlers) {
+        keys.append(handler.key.toString());
+    }
+    return keys;
+}
+
+bool applyConfigValue(AppConfig *config, QStringView key, const QString &value, QString *errorMessage)
+{
+    if (config == nullptr) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Internal error: missing config target");
+        }
+        return false;
+    }
+
+    for (const ConfigKeyHandler &handler : kConfigKeyHandlers) {
+        if (handler.key == key) {
+            return handler.setter(config, value, errorMessage);
+        }
+    }
+
+    if (errorMessage != nullptr) {
+        *errorMessage = QStringLiteral("Unsupported config key: %1").arg(key);
+    }
+    return false;
 }

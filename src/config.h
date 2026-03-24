@@ -1,6 +1,8 @@
 #pragma once
 
+#include <QByteArray>
 #include <QString>
+#include <QStringList>
 
 /**
  * @file
@@ -84,6 +86,12 @@ struct AppConfig {
 };
 
 /**
+ * @brief Returns the built-in runtime defaults.
+ * @return Application config initialized with repo-defined defaults.
+ */
+AppConfig defaultAppConfig();
+
+/**
  * @brief Loads a config file and applies repo-defined fallback defaults.
  *
  * Invalid or missing values are handled permissively where possible so runtime
@@ -94,3 +102,35 @@ struct AppConfig {
  * @return Resolved application config snapshot.
  */
 AppConfig loadConfig(const QString &path, QString *errorMessage = nullptr);
+
+/**
+ * @brief Serializes a config snapshot to indented JSON.
+ * @param config Config snapshot to serialize.
+ * @return UTF-8 JSON payload.
+ */
+QByteArray serializeConfig(const AppConfig &config);
+
+/**
+ * @brief Saves a config snapshot to disk, creating parent directories as needed.
+ * @param path Destination config path.
+ * @param config Config snapshot to save.
+ * @param errorMessage Optional output for write failures.
+ * @return `true` on success.
+ */
+bool saveConfig(const QString &path, const AppConfig &config, QString *errorMessage = nullptr);
+
+/**
+ * @brief Returns the supported dotted keys for config mutation.
+ * @return Supported config keys in user-facing display order.
+ */
+QStringList supportedConfigKeys();
+
+/**
+ * @brief Applies a single dotted-key config value with validation.
+ * @param config Config snapshot to mutate.
+ * @param key Canonical dotted config key.
+ * @param value Text value to parse and validate.
+ * @param errorMessage Optional output for validation failures.
+ * @return `true` when the key is supported and the value is valid.
+ */
+bool applyConfigValue(AppConfig *config, QStringView key, const QString &value, QString *errorMessage = nullptr);
