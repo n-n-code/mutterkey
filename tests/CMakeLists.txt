@@ -1,7 +1,7 @@
 function(mutterkey_add_qt_test target_name)
     add_executable(${target_name} ${ARGN})
     target_include_directories(${target_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
-    target_link_libraries(${target_name} PRIVATE Qt6::Core Qt6::Multimedia Qt6::Test)
+    target_link_libraries(${target_name} PRIVATE Qt6::Core Qt6::Gui Qt6::Multimedia Qt6::Test Qt6::Network Qt6::Widgets)
     add_test(NAME ${target_name} COMMAND ${target_name})
 endfunction()
 
@@ -21,13 +21,35 @@ mutterkey_add_qt_test(recordingnormalizertest
     ../src/audio/recordingnormalizer.cpp
 )
 
+mutterkey_add_qt_test(daemoncontrolprotocoltest
+    daemoncontrolprotocoltest.cpp
+    ../src/control/daemoncontrolprotocol.cpp
+)
+
+mutterkey_add_qt_test(daemoncontroltypestest
+    daemoncontroltypestest.cpp
+    ../src/config.cpp
+    ../src/control/daemoncontroltypes.cpp
+)
+
+mutterkey_add_qt_test(traystatuswindowtest
+    traystatuswindowtest.cpp
+    ../src/control/daemoncontrolclient.cpp
+    ../src/control/daemoncontrolprotocol.cpp
+    ../src/control/daemoncontroltypes.cpp
+    ../src/config.cpp
+    ../src/tray/traystatuswindow.cpp
+)
+
 target_link_libraries(configtest PRIVATE whisper)
 target_link_libraries(commanddispatchtest PRIVATE whisper)
+target_link_libraries(daemoncontroltypestest PRIVATE whisper)
+target_link_libraries(traystatuswindowtest PRIVATE whisper)
 
 if(TARGET clang-tidy)
-    add_dependencies(clang-tidy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen)
+    add_dependencies(clang-tidy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen daemoncontrolprotocoltest_autogen daemoncontroltypestest_autogen traystatuswindowtest_autogen)
 endif()
 
 if(TARGET clazy)
-    add_dependencies(clazy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen)
+    add_dependencies(clazy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen daemoncontrolprotocoltest_autogen daemoncontroltypestest_autogen traystatuswindowtest_autogen)
 endif()

@@ -390,6 +390,71 @@ AppConfig defaultAppConfig()
     return config;
 }
 
+AppConfig loadConfigObject(const QJsonObject &root, const QString &sourceName)
+{
+    AppConfig config = defaultAppConfig();
+    const QJsonObject shortcut = root.value(QStringLiteral("shortcut")).toObject();
+    config.shortcut.componentUnique = readString(shortcut, QStringLiteral("component_unique"), config.shortcut.componentUnique);
+    config.shortcut.componentFriendly = readString(shortcut, QStringLiteral("component_friendly"), config.shortcut.componentFriendly);
+    config.shortcut.actionUnique = readString(shortcut, QStringLiteral("action_unique"), config.shortcut.actionUnique);
+    config.shortcut.actionFriendly = readString(shortcut, QStringLiteral("action_friendly"), config.shortcut.actionFriendly);
+    const QString shortcutSequence = sanitizedNonEmptyString(readString(shortcut, QStringLiteral("sequence"), config.shortcut.sequence));
+    if (shortcutSequence.isEmpty()) {
+        warnAboutInvalidValue(sourceName,
+                              QStringLiteral("shortcut.sequence"),
+                              QStringLiteral("value is empty"),
+                              config.shortcut.sequence);
+    } else {
+        config.shortcut.sequence = shortcutSequence;
+    }
+
+    const QJsonObject audio = root.value(QStringLiteral("audio")).toObject();
+    config.audio.sampleRate = validatedAudioSampleRate(sourceName, readInt(audio, QStringLiteral("sample_rate"), config.audio.sampleRate));
+    config.audio.channels = validatedAudioChannels(sourceName, readInt(audio, QStringLiteral("channels"), config.audio.channels));
+    config.audio.minimumSeconds =
+        validatedMinimumSeconds(sourceName, readDouble(audio, QStringLiteral("minimum_seconds"), config.audio.minimumSeconds));
+    config.audio.deviceId = readString(audio, QStringLiteral("device_id"), config.audio.deviceId);
+
+    const QJsonObject transcriber = root.value(QStringLiteral("transcriber")).toObject();
+    const QString modelPath = sanitizedNonEmptyString(readString(transcriber, QStringLiteral("model_path"), defaultModelPath()));
+    if (modelPath.isEmpty()) {
+        warnAboutInvalidValue(sourceName,
+                              QStringLiteral("transcriber.model_path"),
+                              QStringLiteral("value is empty"),
+                              defaultModelPath());
+    } else {
+        config.transcriber.modelPath = modelPath;
+    }
+    config.transcriber.language = readString(transcriber, QStringLiteral("language"), config.transcriber.language);
+    QString resolvedLanguage;
+    if (resolveWhisperLanguage(config.transcriber.language, &resolvedLanguage)) {
+        config.transcriber.language = resolvedLanguage;
+    } else {
+        warnAboutInvalidValue(sourceName,
+                              QStringLiteral("transcriber.language"),
+                              QStringLiteral("unsupported Whisper language"),
+                              defaultAppConfig().transcriber.language);
+        config.transcriber.language = defaultAppConfig().transcriber.language;
+    }
+    config.transcriber.translate = readBool(transcriber, QStringLiteral("translate"), config.transcriber.translate);
+    config.transcriber.threads = validatedThreads(sourceName, readInt(transcriber, QStringLiteral("threads"), config.transcriber.threads));
+    config.transcriber.warmupOnStart =
+        readBool(transcriber, QStringLiteral("warmup_on_start"), config.transcriber.warmupOnStart);
+
+    const QString logLevel = normalizedLogLevel(readString(root, QStringLiteral("log_level"), config.logLevel));
+    if (isSupportedLogLevel(logLevel)) {
+        config.logLevel = logLevel;
+    } else {
+        warnAboutInvalidValue(sourceName,
+                              QStringLiteral("log_level"),
+                              QStringLiteral("expected one of DEBUG, INFO, WARNING, ERROR"),
+                              config.logLevel);
+    }
+
+    qCInfo(configLog) << "Loaded config from" << sourceName;
+    return config;
+}
+
 AppConfig loadConfig(const QString &path, QString *errorMessage)
 {
     AppConfig config = defaultAppConfig();
@@ -414,70 +479,10 @@ AppConfig loadConfig(const QString &path, QString *errorMessage)
         return config;
     }
 
-    const QJsonObject root = document.object();
-    const QJsonObject shortcut = root.value(QStringLiteral("shortcut")).toObject();
-    config.shortcut.componentUnique = readString(shortcut, QStringLiteral("component_unique"), config.shortcut.componentUnique);
-    config.shortcut.componentFriendly = readString(shortcut, QStringLiteral("component_friendly"), config.shortcut.componentFriendly);
-    config.shortcut.actionUnique = readString(shortcut, QStringLiteral("action_unique"), config.shortcut.actionUnique);
-    config.shortcut.actionFriendly = readString(shortcut, QStringLiteral("action_friendly"), config.shortcut.actionFriendly);
-    const QString shortcutSequence = sanitizedNonEmptyString(readString(shortcut, QStringLiteral("sequence"), config.shortcut.sequence));
-    if (shortcutSequence.isEmpty()) {
-        warnAboutInvalidValue(path,
-                              QStringLiteral("shortcut.sequence"),
-                              QStringLiteral("value is empty"),
-                              config.shortcut.sequence);
-    } else {
-        config.shortcut.sequence = shortcutSequence;
-    }
-
-    const QJsonObject audio = root.value(QStringLiteral("audio")).toObject();
-    config.audio.sampleRate = validatedAudioSampleRate(path, readInt(audio, QStringLiteral("sample_rate"), config.audio.sampleRate));
-    config.audio.channels = validatedAudioChannels(path, readInt(audio, QStringLiteral("channels"), config.audio.channels));
-    config.audio.minimumSeconds =
-        validatedMinimumSeconds(path, readDouble(audio, QStringLiteral("minimum_seconds"), config.audio.minimumSeconds));
-    config.audio.deviceId = readString(audio, QStringLiteral("device_id"), config.audio.deviceId);
-
-    const QJsonObject transcriber = root.value(QStringLiteral("transcriber")).toObject();
-    const QString modelPath = sanitizedNonEmptyString(readString(transcriber, QStringLiteral("model_path"), defaultModelPath()));
-    if (modelPath.isEmpty()) {
-        warnAboutInvalidValue(path,
-                              QStringLiteral("transcriber.model_path"),
-                              QStringLiteral("value is empty"),
-                              defaultModelPath());
-    } else {
-        config.transcriber.modelPath = modelPath;
-    }
-    config.transcriber.language = readString(transcriber, QStringLiteral("language"), config.transcriber.language);
-    QString resolvedLanguage;
-    if (resolveWhisperLanguage(config.transcriber.language, &resolvedLanguage)) {
-        config.transcriber.language = resolvedLanguage;
-    } else {
-        warnAboutInvalidValue(path,
-                              QStringLiteral("transcriber.language"),
-                              QStringLiteral("unsupported Whisper language"),
-                              defaultAppConfig().transcriber.language);
-        config.transcriber.language = defaultAppConfig().transcriber.language;
-    }
-    config.transcriber.translate = readBool(transcriber, QStringLiteral("translate"), config.transcriber.translate);
-    config.transcriber.threads = validatedThreads(path, readInt(transcriber, QStringLiteral("threads"), config.transcriber.threads));
-    config.transcriber.warmupOnStart =
-        readBool(transcriber, QStringLiteral("warmup_on_start"), config.transcriber.warmupOnStart);
-
-    const QString logLevel = normalizedLogLevel(readString(root, QStringLiteral("log_level"), config.logLevel));
-    if (isSupportedLogLevel(logLevel)) {
-        config.logLevel = logLevel;
-    } else {
-        warnAboutInvalidValue(path,
-                              QStringLiteral("log_level"),
-                              QStringLiteral("expected one of DEBUG, INFO, WARNING, ERROR"),
-                              config.logLevel);
-    }
-
-    qCInfo(configLog) << "Loaded config from" << path;
-    return config;
+    return loadConfigObject(document.object(), path);
 }
 
-QByteArray serializeConfig(const AppConfig &config)
+QJsonObject configToJsonObject(const AppConfig &config)
 {
     QJsonObject shortcut;
     shortcut.insert(QStringLiteral("component_unique"), config.shortcut.componentUnique);
@@ -505,7 +510,12 @@ QByteArray serializeConfig(const AppConfig &config)
     root.insert(QStringLiteral("transcriber"), transcriber);
     root.insert(QStringLiteral("log_level"), config.logLevel);
 
-    return QJsonDocument(root).toJson(QJsonDocument::Indented);
+    return root;
+}
+
+QByteArray serializeConfig(const AppConfig &config)
+{
+    return QJsonDocument(configToJsonObject(config)).toJson(QJsonDocument::Indented);
 }
 
 bool saveConfig(const QString &path, const AppConfig &config, QString *errorMessage)

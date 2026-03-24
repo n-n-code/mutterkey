@@ -5,6 +5,7 @@
 /third_party/whisper.cpp/build/
 /third_party/whisper.cpp/build-*/
 /Makefile
+/next_feature/
 *.o
 *.obj
 *.moc

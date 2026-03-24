@@ -50,5 +50,15 @@ jobs:
       - name: Run tests
         run: ctest --test-dir build --output-on-failure
 
+      - name: Validate install tree
+        run: |
+          INSTALL_DIR="$(mktemp -d)"
+          cmake --install build --prefix "$INSTALL_DIR"
+          test -x "$INSTALL_DIR/bin/mutterkey"
+          test -x "$INSTALL_DIR/bin/mutterkey-tray"
+
+      - name: Validate headless tray startup
+        run: timeout 2s env QT_QPA_PLATFORM=offscreen ./build/mutterkey-tray
+
       - name: Run Valgrind Memcheck lane
         run: bash scripts/run-valgrind.sh build

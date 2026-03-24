@@ -105,6 +105,15 @@ ctest --test-dir "$SANITIZER_BUILD_DIR" --output-on-failure
 QT_QPA_PLATFORM=offscreen "$BUILD_DIR/mutterkey" --help
 ```
 
+- Validate tray-shell startup in a headless environment:
+
+```bash
+timeout 2s env QT_QPA_PLATFORM=offscreen "$BUILD_DIR/mutterkey-tray"
+```
+
+- Treat exit code `124` from the tray-shell smoke check as expected when the
+  process stays alive until `timeout` stops it.
+
 - If the change affects startup, service wiring, or config handling, also run:
 
 ```bash
@@ -122,6 +131,7 @@ cmake --install "$BUILD_DIR" --prefix "$INSTALL_DIR"
 
 - Confirm the installed tree contains:
   - `bin/mutterkey`
+  - `bin/mutterkey-tray`
   - required `libwhisper` / `ggml` shared libraries
   - the desktop file under `share/applications`
   - license files under `share/licenses/mutterkey`
