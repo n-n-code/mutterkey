@@ -10,15 +10,24 @@ mutterkey_add_qt_test(configtest
     ../src/config.cpp
 )
 
+mutterkey_add_qt_test(commanddispatchtest
+    commanddispatchtest.cpp
+    ../src/commanddispatch.cpp
+    ../src/config.cpp
+)
+
 mutterkey_add_qt_test(recordingnormalizertest
     recordingnormalizertest.cpp
     ../src/audio/recordingnormalizer.cpp
 )
 
+target_link_libraries(configtest PRIVATE whisper)
+target_link_libraries(commanddispatchtest PRIVATE whisper)
+
 if(TARGET clang-tidy)
-    add_dependencies(clang-tidy configtest_autogen recordingnormalizertest_autogen)
+    add_dependencies(clang-tidy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen)
 endif()
 
 if(TARGET clazy)
-    add_dependencies(clazy configtest_autogen recordingnormalizertest_autogen)
+    add_dependencies(clazy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen)
 endif()

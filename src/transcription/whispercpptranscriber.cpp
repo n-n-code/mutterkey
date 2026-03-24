@@ -3,14 +3,63 @@
 #include <algorithm>
 #include <QFileInfo>
 #include <QLoggingCategory>
+#include <QStringList>
 #include <QThread>
 #include <utility>
 
 extern "C" {
+#include <ggml-backend.h>
 #include <whisper.h>
 }
 
 Q_LOGGING_CATEGORY(whisperCppLog, "mutterkey.transcriber.whispercpp")
+
+namespace {
+
+QString backendDeviceTypeName(enum ggml_backend_dev_type type)
+{
+    switch (type) {
+    case GGML_BACKEND_DEVICE_TYPE_CPU:
+        return QStringLiteral("CPU");
+    case GGML_BACKEND_DEVICE_TYPE_GPU:
+        return QStringLiteral("GPU");
+    case GGML_BACKEND_DEVICE_TYPE_IGPU:
+        return QStringLiteral("IGPU");
+    case GGML_BACKEND_DEVICE_TYPE_ACCEL:
+        return QStringLiteral("ACCEL");
+    }
+
+    return QStringLiteral("UNKNOWN");
+}
+
+QString describeRegisteredBackends()
+{
+    QStringList backendNames;
+    backendNames.reserve(static_cast<qsizetype>(ggml_backend_reg_count()));
+    for (size_t index = 0; index < ggml_backend_reg_count(); ++index) {
+        if (ggml_backend_reg_t reg = ggml_backend_reg_get(index)) {
+            backendNames.append(QString::fromUtf8(ggml_backend_reg_name(reg)));
+        }
+    }
+
+    QStringList deviceDescriptions;
+    deviceDescriptions.reserve(static_cast<qsizetype>(ggml_backend_dev_count()));
+    for (size_t index = 0; index < ggml_backend_dev_count(); ++index) {
+        if (ggml_backend_dev_t device = ggml_backend_dev_get(index)) {
+            const QString deviceName = QString::fromUtf8(ggml_backend_dev_name(device));
+            const QString deviceDescription = QString::fromUtf8(ggml_backend_dev_description(device));
+            deviceDescriptions.append(QStringLiteral("%1[%2]: %3")
+                                          .arg(deviceName,
+                                               backendDeviceTypeName(ggml_backend_dev_type(device)),
+                                               deviceDescription));
+        }
+    }
+
+    return QStringLiteral("registered backends=%1; devices=%2")
+        .arg(backendNames.join(QStringLiteral(", ")), deviceDescriptions.join(QStringLiteral(" | ")));
+}
+
+} // namespace
 
 WhisperCppTranscriber::WhisperCppTranscriber(TranscriberConfig config)
     : m_config(std::move(config))
@@ -122,6 +171,7 @@ bool WhisperCppTranscriber::ensureInitialized(QString *errorMessage)
     }
 
     whisper_context_params contextParams = whisper_context_default_params();
+    qCInfo(whisperCppLog).noquote() << "ggml runtime:" << describeRegisteredBackends();
     m_context.reset(whisper_init_from_file_with_params(modelPath.toUtf8().constData(), contextParams));
     if (m_context == nullptr) {
         if (errorMessage != nullptr) {

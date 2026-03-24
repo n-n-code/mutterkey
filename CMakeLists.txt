@@ -15,6 +15,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(MUTTERKEY_ENABLE_ASAN "Enable AddressSanitizer for repo-owned code and vendored whisper.cpp" OFF)
 option(MUTTERKEY_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer for repo-owned code and vendored whisper.cpp" OFF)
+option(MUTTERKEY_ENABLE_WHISPER_CUDA "Enable whisper.cpp CUDA backend support (NVIDIA)" OFF)
+option(MUTTERKEY_ENABLE_WHISPER_VULKAN "Enable whisper.cpp Vulkan backend support" OFF)
+option(MUTTERKEY_ENABLE_WHISPER_BLAS "Enable whisper.cpp BLAS CPU acceleration" OFF)
+set(MUTTERKEY_WHISPER_BLAS_VENDOR "Generic" CACHE STRING "BLAS vendor passed to whisper.cpp when BLAS acceleration is enabled")
+set_property(CACHE MUTTERKEY_WHISPER_BLAS_VENDOR PROPERTY STRINGS "Generic;OpenBLAS;FLAME;ATLAS;FlexiBLAS;Intel;NVHPC;Apple")
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Multimedia)
 find_package(KF6GlobalAccel CONFIG REQUIRED)
@@ -29,6 +34,8 @@ set(MUTTERKEY_APP_SOURCES
     src/audio/recording.h
     src/clipboardwriter.cpp
     src/clipboardwriter.h
+    src/commanddispatch.cpp
+    src/commanddispatch.h
     src/config.cpp
     src/config.h
     src/hotkeymanager.cpp
@@ -146,6 +153,10 @@ set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(WHISPER_BUILD_SERVER OFF CACHE BOOL "" FORCE)
 set(WHISPER_SANITIZE_ADDRESS ${MUTTERKEY_ENABLE_ASAN} CACHE BOOL "" FORCE)
 set(WHISPER_SANITIZE_UNDEFINED ${MUTTERKEY_ENABLE_UBSAN} CACHE BOOL "" FORCE)
+set(GGML_CUDA ${MUTTERKEY_ENABLE_WHISPER_CUDA} CACHE BOOL "" FORCE)
+set(GGML_VULKAN ${MUTTERKEY_ENABLE_WHISPER_VULKAN} CACHE BOOL "" FORCE)
+set(GGML_BLAS ${MUTTERKEY_ENABLE_WHISPER_BLAS} CACHE BOOL "" FORCE)
+set(GGML_BLAS_VENDOR ${MUTTERKEY_WHISPER_BLAS_VENDOR} CACHE STRING "" FORCE)
 add_subdirectory(third_party/whisper.cpp EXCLUDE_FROM_ALL)
 
 # Mutterkey ships the vendored shared libraries, but it does not install their
@@ -160,6 +171,15 @@ install(TARGETS whisper ggml ggml-base
 )
 if(TARGET ggml-cpu)
     install(TARGETS ggml-cpu LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+endif()
+if(TARGET ggml-cuda)
+    install(TARGETS ggml-cuda LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+endif()
+if(TARGET ggml-vulkan)
+    install(TARGETS ggml-vulkan LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+endif()
+if(TARGET ggml-blas)
+    install(TARGETS ggml-blas LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 endif()
 install(FILES contrib/org.mutterkey.mutterkey.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 install(FILES LICENSE THIRD_PARTY_NOTICES.md DESTINATION ${MUTTERKEY_LICENSE_INSTALL_DIR})

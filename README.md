@@ -110,6 +110,37 @@ This installs:
 - `~/.local/lib/libwhisper.so*` and the required `ggml` libraries
 - `~/.local/share/applications/org.mutterkey.mutterkey.desktop`
 
+Optional acceleration flags:
+
+```bash
+cmake -S . -B "$BUILD_DIR" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INSTALL_PREFIX="$HOME/.local" \
+  -DMUTTERKEY_ENABLE_WHISPER_CUDA=ON
+```
+
+```bash
+cmake -S . -B "$BUILD_DIR" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INSTALL_PREFIX="$HOME/.local" \
+  -DMUTTERKEY_ENABLE_WHISPER_VULKAN=ON
+```
+
+```bash
+cmake -S . -B "$BUILD_DIR" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INSTALL_PREFIX="$HOME/.local" \
+  -DMUTTERKEY_ENABLE_WHISPER_BLAS=ON \
+  -DMUTTERKEY_WHISPER_BLAS_VENDOR=OpenBLAS
+```
+
+Notes:
+
+- `MUTTERKEY_ENABLE_WHISPER_CUDA=ON` is for NVIDIA GPUs and requires a working CUDA toolchain
+- `MUTTERKEY_ENABLE_WHISPER_VULKAN=ON` is for Vulkan-capable GPUs and requires Vulkan development headers and loader libraries
+- `MUTTERKEY_ENABLE_WHISPER_BLAS=ON` improves CPU inference speed rather than enabling GPU execution
+- these options are forwarded to the vendored `whisper.cpp` / `ggml` build and install any resulting backend libraries alongside Mutterkey
+
 ### 2. Put a Whisper model on disk
 
 Example location:
@@ -121,11 +152,24 @@ Example location:
 ### 3. Create the config file
 
 ```bash
-mkdir -p ~/.config/mutterkey
-cp config.example.json ~/.config/mutterkey/config.json
+mutterkey config init --model-path ~/.local/share/mutterkey/models/ggml-base.en.bin
 ```
 
-Edit `~/.config/mutterkey/config.json` and set at least:
+`mutterkey config init` writes the Linux config file to:
+
+```text
+~/.config/mutterkey/config.json
+```
+
+When run from a terminal, Mutterkey can also create this file automatically on
+first launch if it does not exist yet. The interactive bootstrap asks for:
+
+- `transcriber.model_path`
+- `shortcut.sequence`
+
+You can update saved values later with `mutterkey config set <key> <value>`.
+
+Set at least:
 
 - `shortcut.sequence`
 - `transcriber.model_path`
@@ -159,8 +203,11 @@ See [config.example.json](config.example.json) for the full config.
 Config notes:
 
 - `transcriber.threads: 0` means auto-detect based on the local machine
+- `transcriber.language` accepts a Whisper language code such as `en` or `fi`, or `auto` for language detection
 - invalid numeric values fall back to safe defaults and log a warning
+- invalid `transcriber.language` values fall back to the default and log a warning
 - empty `shortcut.sequence` or `transcriber.model_path` values fall back to defaults and log a warning
+- runtime flags such as `--model-path`, `--shortcut`, `--language`, `--translate`, `--threads`, and `--warmup-on-start` override the saved config for the current process only
 
 ### 4. Sanity-check the installed binary
 
@@ -185,7 +232,8 @@ The default service file assumes:
 - config file at `%h/.config/mutterkey/config.json`
 
 If your paths differ, edit [contrib/mutterkey.service](contrib/mutterkey.service)
-before enabling it.
+before enabling it. If the config file does not exist, the service will fail
+fast and instruct you to run `mutterkey config init` from a terminal first.
 
 ### 6. Use the hotkey
 
@@ -229,6 +277,14 @@ installed setup looks like:
 
 ```text
 %h/.local/bin/mutterkey daemon --config %h/.config/mutterkey/config.json
+```
+
+Useful config commands:
+
+```bash
+~/.local/bin/mutterkey config init --model-path ~/.local/share/mutterkey/models/ggml-base.en.bin
+~/.local/bin/mutterkey config set shortcut.sequence Meta+F8
+~/.local/bin/mutterkey config set transcriber.language fi
 ```
 
 The desktop entry

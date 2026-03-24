@@ -33,6 +33,27 @@ BUILD_DIR="$(mktemp -d /tmp/mutterkey-build-XXXXXX)"
 cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Debug
 ```
 
+- If the release is intended to ship an accelerated Whisper backend, configure
+  the build with the relevant Mutterkey options:
+
+```bash
+cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Debug -DMUTTERKEY_ENABLE_WHISPER_CUDA=ON
+```
+
+```bash
+cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Debug -DMUTTERKEY_ENABLE_WHISPER_VULKAN=ON
+```
+
+```bash
+cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Debug -DMUTTERKEY_ENABLE_WHISPER_BLAS=ON -DMUTTERKEY_WHISPER_BLAS_VENDOR=OpenBLAS
+```
+
+- Acceleration option notes:
+  - `MUTTERKEY_ENABLE_WHISPER_CUDA=ON`: NVIDIA GPU build through vendored `ggml`
+  - `MUTTERKEY_ENABLE_WHISPER_VULKAN=ON`: Vulkan GPU build through vendored `ggml`
+  - `MUTTERKEY_ENABLE_WHISPER_BLAS=ON`: faster CPU inference, not GPU execution
+  - choose the backend intentionally for the release artifact and record that choice in release notes or packaging docs when relevant
+
 - Build:
 
 ```bash
@@ -104,6 +125,11 @@ cmake --install "$BUILD_DIR" --prefix "$INSTALL_DIR"
   - required `libwhisper` / `ggml` shared libraries
   - the desktop file under `share/applications`
   - license files under `share/licenses/mutterkey`
+- If acceleration was enabled for the release, also confirm the installed tree
+  contains the expected backend library:
+  - `libggml-cuda.so*` for `MUTTERKEY_ENABLE_WHISPER_CUDA=ON`
+  - `libggml-vulkan.so*` for `MUTTERKEY_ENABLE_WHISPER_VULKAN=ON`
+  - `libggml-blas.so*` for `MUTTERKEY_ENABLE_WHISPER_BLAS=ON`
 - Do not expect vendored upstream public headers to be installed; Mutterkey's
   install rules ship the runtime libraries but intentionally clear vendored
   `PUBLIC_HEADER` metadata to avoid upstream header-install warnings.
@@ -118,6 +144,12 @@ cmake --install "$BUILD_DIR" --prefix "$INSTALL_DIR"
   recommended installed-binary setup.
 - Confirm [contrib/org.mutterkey.mutterkey.desktop](contrib/org.mutterkey.mutterkey.desktop)
   still reflects the intended desktop behavior, including `NoDisplay=true`.
+- If the release is intended to use accelerated Whisper inference, verify the
+  runtime logs on a representative machine show the expected backend instead of
+  CPU-only fallback. For example:
+  - CUDA/Vulkan releases should not log only `registered backend CPU`
+  - CPU-accelerated BLAS releases may still be CPU-only, but should be tested
+    against a representative Whisper model and expected performance target
 
 ## Vendored whisper.cpp Updates
 
