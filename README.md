@@ -67,6 +67,7 @@ Optional developer tooling:
 - `clang-tidy`
 - `clazy-standalone`
 - `doxygen`
+- `ninja-build`
 - `valgrind`
 - `libc6-dbg` on Debian-family systems so Valgrind Memcheck can start cleanly
 
@@ -102,9 +103,13 @@ trusted local session, not as a sandboxed dictation or secret-handling system.
 
 ### 1. Build and install
 
+Prefer `Ninja` when it is available so local builds match CI more closely.
+If you do not have `ninja-build` installed, omit `-G Ninja` and let CMake use
+the default generator for your machine.
+
 ```bash
 BUILD_DIR="$(mktemp -d /tmp/mutterkey-build-XXXXXX)"
-cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$HOME/.local"
+cmake -S . -B "$BUILD_DIR" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$HOME/.local"
 cmake --build "$BUILD_DIR" -j"$(nproc)"
 cmake --install "$BUILD_DIR"
 ```
@@ -120,6 +125,7 @@ Optional acceleration flags:
 
 ```bash
 cmake -S . -B "$BUILD_DIR" \
+  -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="$HOME/.local" \
   -DMUTTERKEY_ENABLE_WHISPER_CUDA=ON
@@ -127,6 +133,7 @@ cmake -S . -B "$BUILD_DIR" \
 
 ```bash
 cmake -S . -B "$BUILD_DIR" \
+  -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="$HOME/.local" \
   -DMUTTERKEY_ENABLE_WHISPER_VULKAN=ON
@@ -134,6 +141,7 @@ cmake -S . -B "$BUILD_DIR" \
 
 ```bash
 cmake -S . -B "$BUILD_DIR" \
+  -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="$HOME/.local" \
   -DMUTTERKEY_ENABLE_WHISPER_BLAS=ON \
@@ -368,7 +376,7 @@ Build and test:
 
 ```bash
 BUILD_DIR="$(mktemp -d /tmp/mutterkey-build-XXXXXX)"
-cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Debug
+cmake -S . -B "$BUILD_DIR" -G Ninja -DCMAKE_BUILD_TYPE=Debug
 cmake --build "$BUILD_DIR" -j"$(nproc)"
 ctest --test-dir "$BUILD_DIR" --output-on-failure
 QT_QPA_PLATFORM=offscreen "$BUILD_DIR/mutterkey" --help
@@ -394,13 +402,17 @@ generates HTML documentation under `"$BUILD_DIR"/docs/doxygen/html`. CI installs
 Doxygen and treats documentation warnings in repo-owned code as failures. The
 generated main page comes from `docs/mainpage.md`; keep that page focused on the
 repo-owned API surface instead of pointing Doxygen at the full release-facing
-README, which contains links to files outside the API-doc input set.
+README, which contains links to files outside the API-doc input set. On GitHub,
+the same generated HTML tree is published to GitHub Pages from successful
+`main` branch CI runs. Enable `Settings -> Pages -> Source: GitHub Actions`
+once in the repository so the deployment job can publish the site. The expected
+published URL is <https://n-n-code.github.io/mutterkey/>.
 
 Memory diagnostics:
 
 ```bash
 BUILD_DIR_ASAN="$(mktemp -d /tmp/mutterkey-asan-build-XXXXXX)"
-cmake -S . -B "$BUILD_DIR_ASAN" -DCMAKE_BUILD_TYPE=Debug -DMUTTERKEY_ENABLE_ASAN=ON -DMUTTERKEY_ENABLE_UBSAN=ON
+cmake -S . -B "$BUILD_DIR_ASAN" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DMUTTERKEY_ENABLE_ASAN=ON -DMUTTERKEY_ENABLE_UBSAN=ON
 cmake --build "$BUILD_DIR_ASAN" -j"$(nproc)"
 ctest --test-dir "$BUILD_DIR_ASAN" --output-on-failure
 
@@ -442,6 +454,7 @@ Notes:
 - `scripts/update-whisper.sh` requires a clean Git work tree before it will fetch or run subtree operations
 - `third_party/whisper.cpp` is maintained through the subtree workflow; use the helper instead of ad hoc vendor-directory replacement
 - the repo exports `compile_commands.json` by default
+- local docs prefer `-G Ninja` to match CI, but generator-agnostic `cmake -S . -B "$BUILD_DIR"` remains supported when Ninja is not installed
 - `lint` runs both analyzer targets
 - `docs` is available only when Doxygen is installed during configuration
 - the top-level install rules intentionally clear vendored `PUBLIC_HEADER`
@@ -451,6 +464,7 @@ Notes:
 - tests are small headless `Qt Test` cases
 - `config` and `recordingnormalizer` currently have the main unit-test coverage because they contain the most deterministic logic without KDE session or device dependencies
 - GitHub Actions CI runs the hygiene job on Ubuntu 24.04 and the configure/build/test job in a Debian Trixie container because the needed KF6 dev packages are not available on the stock Ubuntu 24.04 runner image
+- successful `main` branch CI runs publish `build/docs/doxygen/html` to GitHub Pages with the official Pages actions
 - GitHub Actions release checks run a separate Valgrind Memcheck lane on manual dispatch and `v*` tags so normal PR CI stays faster
 - runtime validation for microphone capture, clipboard behavior, and KDE global
   shortcut registration still relies on `once`, `daemon`, and `diagnose`

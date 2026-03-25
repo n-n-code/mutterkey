@@ -79,3 +79,35 @@ jobs:
             status=$?
             test "$status" -eq 124
           fi
+
+      - name: Upload GitHub Pages artifact
+        # PRs still build docs for validation, but only the default branch
+        # publishes the generated site.
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/docs/doxygen/html
+
+  deploy-docs:
+    runs-on: ubuntu-24.04
+    needs: build-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      # GitHub Pages deployment needs these extra permissions; keep them scoped
+      # to the deploy job rather than granting them to the whole workflow.
+      pages: write
+      id-token: write
+    concurrency:
+      group: github-pages
+      cancel-in-progress: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

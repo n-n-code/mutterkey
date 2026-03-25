@@ -60,11 +60,15 @@ Before answering build/setup questions or changing build behavior, read the `Ove
 
 Use an out-of-tree build directory outside the repo root when possible so the working tree stays clean.
 
+Prefer `-G Ninja` when it is available so local builds match CI more closely.
+If `ninja-build` is not installed, omit `-G Ninja` and let CMake use the
+system default generator.
+
 Example:
 
 ```bash
 BUILD_DIR="$(mktemp -d /tmp/mutterkey-build-XXXXXX)"
-cmake -S . -B "$BUILD_DIR"
+cmake -S . -B "$BUILD_DIR" -G Ninja
 cmake --build "$BUILD_DIR" -j"$(nproc)"
 ```
 
