@@ -19,7 +19,7 @@ Current direction:
 - KDE-first
 - local-only transcription
 - CLI/service-first operation
-- no GUI yet
+- tray-shell work has started, but the daemon remains the product core
 - minimal and developer-oriented rather than a hardened end-user security product
 
 Recommended startup path:
@@ -47,7 +47,7 @@ Supported environment:
 
 Build requirements:
 
-1. Qt 6 development packages with `Core`, `Gui`, and `Multimedia`
+1. Qt 6 development packages with `Core`, `Gui`, `Multimedia`, `Network`, and `Widgets`
 2. KDE Frameworks development packages for `KGlobalAccel` and `KGuiAddons`
 3. `g++`
 4. `cmake`
@@ -108,6 +108,7 @@ cmake --install "$BUILD_DIR"
 This installs:
 
 - `~/.local/bin/mutterkey`
+- `~/.local/bin/mutterkey-tray`
 - `~/.local/lib/libwhisper.so*` and the required `ggml` libraries
 - `~/.local/share/applications/org.mutterkey.mutterkey.desktop`
 
@@ -354,6 +355,9 @@ Repository layout:
 - `src/transcription/transcriptiontypes.h`: normalized-audio and transcription result value types
 - `src/clipboardwriter.*`: clipboard writes with KDE-first fallback behavior
 - `src/config.*`: JSON config loading and defaults
+- `src/app/*`: shared CLI/runtime command helpers used by the main entrypoint
+- `src/control/*`: local daemon control protocol, typed snapshots, and local-socket session/server wiring
+- `src/tray/*`: Qt Widgets tray-shell UI scaffolding
 - `contrib/mutterkey.service`: example user service
 
 Build and test:

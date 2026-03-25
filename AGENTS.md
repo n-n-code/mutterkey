@@ -10,7 +10,7 @@ Current architecture:
 - Audio capture uses Qt Multimedia
 - Transcription is in-process through vendored `whisper.cpp`
 - Clipboard writes prefer `KSystemClipboard` with `QClipboard` fallback
-- There is no GUI yet; the entrypoint is the `mutterkey` binary with `daemon`, `once`, and `diagnose` modes
+- There is an early Qt Widgets tray shell in `mutterkey-tray`, but the daemon remains the product core
 - The recommended day-to-day runtime path is the `systemd --user` service
 - The installed desktop entry is intentionally hidden from normal app menus with `NoDisplay=true`
 - `daemon` is the default runtime mode; `once` and `diagnose` are validation helpers
@@ -36,9 +36,13 @@ This repository is intentionally kept minimal:
 - `src/transcription/transcriptionworker.*`: worker object hosted on a dedicated `QThread`
 - `src/transcription/transcriptiontypes.h`: normalized audio and transcription result value types
 - `src/config.*`: JSON config loading and defaults
+- `src/app/*`: shared CLI/runtime command helpers used by the main entrypoint
+- `src/control/*`: local daemon control transport, typed snapshots, and session/client APIs
+- `src/tray/*`: Qt Widgets tray-shell UI scaffolding
 - `contrib/mutterkey.service`: example user service
 - `contrib/org.mutterkey.mutterkey.desktop`: hidden desktop entry used for desktop identity/integration
 - `scripts/check-release-hygiene.sh`: repo hygiene checks for publication-facing content
+- `next_feature/`: tracked upcoming feature plans as Markdown; keep only plan `.md` files and the folder-local `.gitignore`
 - `docs/Doxyfile.in`: Doxygen config template for repo-owned API docs
 - `docs/mainpage.md`: Doxygen landing page used instead of the full README
 - `scripts/run-valgrind.sh`: deterministic Valgrind Memcheck runner for release-readiness checks
@@ -63,6 +67,10 @@ BUILD_DIR="$(mktemp -d /tmp/mutterkey-build-XXXXXX)"
 cmake -S . -B "$BUILD_DIR"
 cmake --build "$BUILD_DIR" -j"$(nproc)"
 ```
+
+If a sandboxed build fails with `ccache: error: Read-only file system`, treat
+that as an environment limitation rather than a repo regression and rerun the
+build with `CCACHE_DISABLE=1`.
 
 If the task affects install layout, licensing, or packaging, also validate a temporary install prefix:
 
@@ -94,6 +102,7 @@ Notes:
 - A small `Qt Test` + `CTest` suite exists for config loading and audio normalization, including malformed JSON, wrong-type config inputs, and recording-normalizer edge cases
 - Config loading is intentionally forgiving: invalid runtime values fall back to defaults and log warnings
 - Use `ctest --test-dir "$BUILD_DIR" --output-on-failure` for changes that affect covered code
+- Keep Qt GUI or Widgets tests headless under `CTest`: set `QT_QPA_PLATFORM=offscreen` in the test registration or test properties rather than relying on the caller environment
 - Use `bash scripts/run-valgrind.sh "$BUILD_DIR"` or `cmake --build "$BUILD_DIR" --target valgrind` when validating memory behavior for release readiness or after fixing memory-lifetime issues
 - On Debian-family systems, install `libc6-dbg` if Valgrind fails at startup with a `ld-linux` / mandatory redirection error
 - Use `cmake --build "$BUILD_DIR" --target clang-tidy` after C++ changes when static-analysis noise is likely to matter
@@ -114,10 +123,12 @@ Notes:
 - Keep the Doxygen main page in `docs/mainpage.md` small and API-focused. The release-facing `README.md` may link to files outside the Doxygen input set and should not be used as the Doxygen main page unless the input set is expanded deliberately
 - Keep analyzer fixes targeted to `src/` and `tests/`; do not churn `third_party/` or generated Qt autogen output to satisfy tooling
 - Reconfigure the build directory after installing new tools so cached `find_program()` results are refreshed
+- When validating inside a restricted sandbox, be ready to disable `ccache` with `CCACHE_DISABLE=1` if the cache location is read-only; that is an execution-environment issue, not a Mutterkey build failure
 - Prefer fixing the code over weakening `.clang-tidy` or the Clazy check set; only relax tool config when the warning is clearly low-value for this repo
 - Do not add broad Valgrind suppressions by default; only add narrow suppressions after reproducing stable third-party noise and keep them clearly scoped
 - When adding tests, prefer small `Qt Test` cases that run headlessly under `CTest` and avoid microphone, clipboard, or KDE session dependencies unless the task is specifically integration-focused
 - For tool-driven cleanups, preserve the existing design and behavior; do not perform broad rewrites just to satisfy style-oriented recommendations
+- Keep forward-looking feature plans under `next_feature/` as tracked Markdown files; do not leave scratch notes, binaries, or generated artifacts there
 
 ## Coding Guidelines
 
@@ -128,6 +139,8 @@ Notes:
 - Avoid introducing optional backends, plugin systems, or cross-platform abstractions unless the task requires them
 - Keep the audio path explicit: recorder output may not already match Whisper input requirements, so preserve normalization behavior
 - Prefer narrow shared value types across subsystems; for example, consumers that only need captured audio should include `src/audio/recording.h`, not the full recorder class
+- Keep JSON and other transport details at subsystem boundaries; prefer typed C++ snapshots/results once data crosses into app-owned control, tray, or service code
+- Prefer dependency injection for tray-shell and control-surface code from the first implementation so headless Qt tests stay simple
 - Preserve the current product direction: embedded `whisper.cpp`, KDE-first, CLI/service-first
 
 ## C++ Core Guidelines Priorities
@@ -193,12 +206,16 @@ Typical model location:
 
 - Read `README.md` first, especially `Overview`, `Quick Start`, `Run As Service`, and `Development`, then read the touched source files before editing
 - Prefer targeted changes over speculative cleanup
+- If a change grows daemon, tray, or control-plane behavior, prefer extracting or extending repo-owned libraries under `src/app/`, `src/control/`, or other focused modules instead of piling more orchestration into `src/main.cpp`
 - Update `README.md` and `config.example.json` when behavior or setup changes
 - Update `contrib/mutterkey.service` and `contrib/org.mutterkey.mutterkey.desktop` when service/desktop behavior changes
 - Update `LICENSE`, `THIRD_PARTY_NOTICES.md`, CMake install rules, and `third_party/whisper.cpp.UPSTREAM.md` when packaging, licensing, or vendored dependency behavior changes
 - Keep `README.md`, `AGENTS.md`, and any relevant local skills aligned with the current `scripts/update-whisper.sh` workflow when the vendor-update process changes
+- Store upcoming feature plans in `next_feature/` as Markdown files, and update the existing plan there when refining the same upcoming feature instead of scattering notes across the repo
+- Treat `mutterkey-tray` as a shipped artifact once it is installed or validated in CI; keep install rules, README/setup notes, release checklist items, and workflow checks aligned with that status
 - Verify with a fresh CMake build when the change affects compilation or linkage
 - Run `ctest` when touching covered code in `src/config.*` or `src/audio/recordingnormalizer.*`, and extend the deterministic headless tests when practical
+- When adding or fixing Qt GUI tests, make the `CTest` registration itself headless with `QT_QPA_PLATFORM=offscreen` so CI does not try to load `xcb`
 - Prefer expanding tests around pure parsing, value normalization, and other environment-independent logic before adding KDE-session or device-heavy coverage
 - Use `-DMUTTERKEY_ENABLE_ASAN=ON` and `-DMUTTERKEY_ENABLE_UBSAN=ON` for fast iteration on memory and UB bugs, and use the repo-owned Valgrind lane as the slower release-focused confirmation step
 - Run `clang-tidy` and `clazy` targets for non-trivial C++/Qt changes when the tools are installed in the environment

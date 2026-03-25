@@ -21,12 +21,12 @@ option(MUTTERKEY_ENABLE_WHISPER_BLAS "Enable whisper.cpp BLAS CPU acceleration" 
 set(MUTTERKEY_WHISPER_BLAS_VENDOR "Generic" CACHE STRING "BLAS vendor passed to whisper.cpp when BLAS acceleration is enabled")
 set_property(CACHE MUTTERKEY_WHISPER_BLAS_VENDOR PROPERTY STRINGS "Generic;OpenBLAS;FLAME;ATLAS;FlexiBLAS;Intel;NVHPC;Apple")
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Multimedia)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Multimedia Network Widgets)
 find_package(KF6GlobalAccel CONFIG REQUIRED)
 find_package(KF6GuiAddons CONFIG REQUIRED)
 find_package(Doxygen QUIET)
 
-set(MUTTERKEY_APP_SOURCES
+set(MUTTERKEY_CORE_SOURCES
     src/audio/audiorecorder.cpp
     src/audio/audiorecorder.h
     src/audio/recordingnormalizer.cpp
@@ -40,7 +40,6 @@ set(MUTTERKEY_APP_SOURCES
     src/config.h
     src/hotkeymanager.cpp
     src/hotkeymanager.h
-    src/main.cpp
     src/service.cpp
     src/service.h
     src/transcription/transcriptiontypes.h
@@ -50,11 +49,49 @@ set(MUTTERKEY_APP_SOURCES
     src/transcription/whispercpptranscriber.h
 )
 
-add_executable(mutterkey ${MUTTERKEY_APP_SOURCES})
+set(MUTTERKEY_CONTROL_SOURCES
+    src/control/daemoncontrolclient.cpp
+    src/control/daemoncontrolclient.h
+    src/control/daemoncontrolprotocol.cpp
+    src/control/daemoncontrolprotocol.h
+    src/control/daemoncontrolserver.cpp
+    src/control/daemoncontrolserver.h
+    src/control/daemoncontroltypes.cpp
+    src/control/daemoncontroltypes.h
+)
 
+add_library(mutterkey_core STATIC ${MUTTERKEY_CORE_SOURCES})
+add_library(mutterkey_control STATIC ${MUTTERKEY_CONTROL_SOURCES})
+add_library(mutterkey_app STATIC
+    src/app/applicationcommands.cpp
+    src/app/applicationcommands.h
+)
+
+add_executable(mutterkey
+    src/main.cpp
+)
+
+add_executable(mutterkey-tray
+    src/tray/traystatuswindow.cpp
+    src/tray/traystatuswindow.h
+    src/traymain.cpp
+)
+
+target_include_directories(mutterkey_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_include_directories(mutterkey_control PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_include_directories(mutterkey_app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_include_directories(mutterkey PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(mutterkey PRIVATE Qt6::Core Qt6::Gui Qt6::Multimedia KF6::GlobalAccel KF6::GuiAddons)
+target_include_directories(mutterkey-tray PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(mutterkey_core PUBLIC Qt6::Core Qt6::Gui Qt6::Multimedia KF6::GlobalAccel KF6::GuiAddons)
+target_link_libraries(mutterkey_control PUBLIC Qt6::Core Qt6::Network mutterkey_core)
+target_link_libraries(mutterkey_app PUBLIC Qt6::Core Qt6::Gui mutterkey_control)
+target_link_libraries(mutterkey PRIVATE mutterkey_app whisper)
+target_link_libraries(mutterkey-tray PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets mutterkey_control)
 set_target_properties(mutterkey PROPERTIES
+    BUILD_RPATH "$ORIGIN/../lib"
+    INSTALL_RPATH "$ORIGIN/../lib"
+)
+set_target_properties(mutterkey-tray PROPERTIES
     BUILD_RPATH "$ORIGIN/../lib"
     INSTALL_RPATH "$ORIGIN/../lib"
 )
@@ -84,7 +121,11 @@ function(mutterkey_enable_sanitizers target_name)
     endif()
 endfunction()
 
+mutterkey_enable_sanitizers(mutterkey_core)
+mutterkey_enable_sanitizers(mutterkey_control)
+mutterkey_enable_sanitizers(mutterkey_app)
 mutterkey_enable_sanitizers(mutterkey)
+mutterkey_enable_sanitizers(mutterkey-tray)
 
 set(MUTTERKEY_CLAZY_CHECKS "level0" CACHE STRING "Checks passed to clazy-standalone")
 
@@ -163,9 +204,10 @@ add_subdirectory(third_party/whisper.cpp EXCLUDE_FROM_ALL)
 # upstream public headers as part of its own package layout.
 set_target_properties(whisper ggml PROPERTIES PUBLIC_HEADER "")
 
-target_link_libraries(mutterkey PRIVATE whisper)
+target_link_libraries(mutterkey_core PUBLIC whisper)
 
 install(TARGETS mutterkey RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS mutterkey-tray RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(TARGETS whisper ggml ggml-base
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )

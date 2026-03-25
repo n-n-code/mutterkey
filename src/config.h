@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QByteArray>
+#include <QJsonObject>
 #include <QString>
 #include <QStringList>
 
@@ -104,11 +105,30 @@ AppConfig defaultAppConfig();
 AppConfig loadConfig(const QString &path, QString *errorMessage = nullptr);
 
 /**
+ * @brief Loads a config object and applies the same fallback rules as file loading.
+ *
+ * This is primarily used by in-memory control-plane payloads so the tray and
+ * daemon share one config contract instead of maintaining parallel JSON readers.
+ *
+ * @param root JSON object shaped like the saved config file.
+ * @param sourceName Human-readable source label used in warning messages.
+ * @return Resolved application config snapshot.
+ */
+AppConfig loadConfigObject(const QJsonObject &root, const QString &sourceName = QStringLiteral("<in-memory config>"));
+
+/**
  * @brief Serializes a config snapshot to indented JSON.
  * @param config Config snapshot to serialize.
  * @return UTF-8 JSON payload.
  */
 QByteArray serializeConfig(const AppConfig &config);
+
+/**
+ * @brief Converts a config snapshot to the saved JSON object shape.
+ * @param config Config snapshot to convert.
+ * @return JSON object matching the on-disk config structure.
+ */
+QJsonObject configToJsonObject(const AppConfig &config);
 
 /**
  * @brief Saves a config snapshot to disk, creating parent directories as needed.
