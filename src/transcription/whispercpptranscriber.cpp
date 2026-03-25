@@ -14,7 +14,7 @@ extern "C" {
 
 namespace {
 
-Q_STATIC_LOGGING_CATEGORY(whisperCppLog, "mutterkey.transcriber.whispercpp")
+Q_LOGGING_CATEGORY(whisperCppLog, "mutterkey.transcriber.whispercpp")
 
 QString backendDeviceTypeName(enum ggml_backend_dev_type type)
 {

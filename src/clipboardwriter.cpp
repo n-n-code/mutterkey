@@ -8,7 +8,7 @@
 
 namespace {
 
-Q_STATIC_LOGGING_CATEGORY(clipboardLog, "mutterkey.clipboard")
+Q_LOGGING_CATEGORY(clipboardLog, "mutterkey.clipboard")
 
 } // namespace
 

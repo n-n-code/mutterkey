@@ -5,7 +5,7 @@
 
 namespace {
 
-Q_STATIC_LOGGING_CATEGORY(serviceLog, "mutterkey.service")
+Q_LOGGING_CATEGORY(serviceLog, "mutterkey.service")
 
 } // namespace
 

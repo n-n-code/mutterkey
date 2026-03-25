@@ -24,7 +24,7 @@ extern "C" {
 
 namespace {
 
-Q_STATIC_LOGGING_CATEGORY(configLog, "mutterkey.config")
+Q_LOGGING_CATEGORY(configLog, "mutterkey.config")
 
 constexpr int kDefaultAudioSampleRate = 16000;
 constexpr int kDefaultAudioChannels = 1;

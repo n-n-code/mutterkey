@@ -10,7 +10,7 @@
 
 namespace {
 
-Q_STATIC_LOGGING_CATEGORY(audioLog, "mutterkey.audio")
+Q_LOGGING_CATEGORY(audioLog, "mutterkey.audio")
 
 } // namespace
 

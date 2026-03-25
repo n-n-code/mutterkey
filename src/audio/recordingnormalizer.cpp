@@ -17,7 +17,7 @@
 
 namespace {
 
-Q_STATIC_LOGGING_CATEGORY(normalizerLog, "mutterkey.audio.normalizer")
+Q_LOGGING_CATEGORY(normalizerLog, "mutterkey.audio.normalizer")
 
 //
 // PCM helpers

@@ -11,7 +11,7 @@
 
 namespace {
 
-Q_STATIC_LOGGING_CATEGORY(hotkeyLog, "mutterkey.hotkey")
+Q_LOGGING_CATEGORY(hotkeyLog, "mutterkey.hotkey")
 
 QJsonArray sequenceToJson(const QKeySequence &sequence)
 {
