@@ -3,6 +3,9 @@ function(mutterkey_add_qt_test target_name)
     target_include_directories(${target_name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
     target_link_libraries(${target_name} PRIVATE Qt6::Core Qt6::Gui Qt6::Multimedia Qt6::Test Qt6::Network Qt6::Widgets)
     add_test(NAME ${target_name} COMMAND ${target_name})
+    set_tests_properties(${target_name} PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    )
 endfunction()
 
 mutterkey_add_qt_test(configtest

@@ -68,6 +68,10 @@ cmake -S . -B "$BUILD_DIR"
 cmake --build "$BUILD_DIR" -j"$(nproc)"
 ```
 
+If a sandboxed build fails with `ccache: error: Read-only file system`, treat
+that as an environment limitation rather than a repo regression and rerun the
+build with `CCACHE_DISABLE=1`.
+
 If the task affects install layout, licensing, or packaging, also validate a temporary install prefix:
 
 ```bash
@@ -98,6 +102,7 @@ Notes:
 - A small `Qt Test` + `CTest` suite exists for config loading and audio normalization, including malformed JSON, wrong-type config inputs, and recording-normalizer edge cases
 - Config loading is intentionally forgiving: invalid runtime values fall back to defaults and log warnings
 - Use `ctest --test-dir "$BUILD_DIR" --output-on-failure` for changes that affect covered code
+- Keep Qt GUI or Widgets tests headless under `CTest`: set `QT_QPA_PLATFORM=offscreen` in the test registration or test properties rather than relying on the caller environment
 - Use `bash scripts/run-valgrind.sh "$BUILD_DIR"` or `cmake --build "$BUILD_DIR" --target valgrind` when validating memory behavior for release readiness or after fixing memory-lifetime issues
 - On Debian-family systems, install `libc6-dbg` if Valgrind fails at startup with a `ld-linux` / mandatory redirection error
 - Use `cmake --build "$BUILD_DIR" --target clang-tidy` after C++ changes when static-analysis noise is likely to matter
@@ -118,6 +123,7 @@ Notes:
 - Keep the Doxygen main page in `docs/mainpage.md` small and API-focused. The release-facing `README.md` may link to files outside the Doxygen input set and should not be used as the Doxygen main page unless the input set is expanded deliberately
 - Keep analyzer fixes targeted to `src/` and `tests/`; do not churn `third_party/` or generated Qt autogen output to satisfy tooling
 - Reconfigure the build directory after installing new tools so cached `find_program()` results are refreshed
+- When validating inside a restricted sandbox, be ready to disable `ccache` with `CCACHE_DISABLE=1` if the cache location is read-only; that is an execution-environment issue, not a Mutterkey build failure
 - Prefer fixing the code over weakening `.clang-tidy` or the Clazy check set; only relax tool config when the warning is clearly low-value for this repo
 - Do not add broad Valgrind suppressions by default; only add narrow suppressions after reproducing stable third-party noise and keep them clearly scoped
 - When adding tests, prefer small `Qt Test` cases that run headlessly under `CTest` and avoid microphone, clipboard, or KDE session dependencies unless the task is specifically integration-focused
@@ -209,6 +215,7 @@ Typical model location:
 - Treat `mutterkey-tray` as a shipped artifact once it is installed or validated in CI; keep install rules, README/setup notes, release checklist items, and workflow checks aligned with that status
 - Verify with a fresh CMake build when the change affects compilation or linkage
 - Run `ctest` when touching covered code in `src/config.*` or `src/audio/recordingnormalizer.*`, and extend the deterministic headless tests when practical
+- When adding or fixing Qt GUI tests, make the `CTest` registration itself headless with `QT_QPA_PLATFORM=offscreen` so CI does not try to load `xcb`
 - Prefer expanding tests around pure parsing, value normalization, and other environment-independent logic before adding KDE-session or device-heavy coverage
 - Use `-DMUTTERKEY_ENABLE_ASAN=ON` and `-DMUTTERKEY_ENABLE_UBSAN=ON` for fast iteration on memory and UB bugs, and use the repo-owned Valgrind lane as the slower release-focused confirmation step
 - Run `clang-tidy` and `clazy` targets for non-trivial C++/Qt changes when the tools are installed in the environment
