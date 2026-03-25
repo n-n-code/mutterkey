@@ -2,6 +2,7 @@
 #include "commanddispatch.h"
 #include "config.h"
 
+#include <algorithm>
 #include <QCommandLineOption>
 #include <QCommandLineParser>
 #include <QFileInfo>
@@ -122,16 +123,15 @@ bool promptForConfigValue(QStringView label,
 
 bool applyOverrides(AppConfig *config, const QList<ConfigOverride> &overrides, QString *errorMessage)
 {
-    for (const ConfigOverride &overrideValue : overrides) {
+    return std::ranges::all_of(overrides, [config, errorMessage](const ConfigOverride &overrideValue) {
         if (!applyConfigValue(config, overrideValue.key, overrideValue.value, errorMessage)) {
             if (errorMessage != nullptr && !errorMessage->isEmpty()) {
                 *errorMessage = QStringLiteral("Invalid value for %1: %2").arg(overrideValue.key, *errorMessage);
             }
             return false;
         }
-    }
-
-    return true;
+        return true;
+    });
 }
 
 bool collectConfigOverrides(const QCommandLineParser &parser,
@@ -347,33 +347,33 @@ int runConfigCommand(const QStringList &arguments)
     QCommandLineParser parser;
     configureCommandLineParser(&parser);
 
-    QCommandLineOption configOption(QStringList{QStringLiteral("config")},
-                                    QStringLiteral("Path to the JSON config file"),
-                                    QStringLiteral("path"),
-                                    defaultConfigPath());
-    QCommandLineOption logLevelOption(QStringList{QStringLiteral("log-level")},
-                                      QStringLiteral("Override the configured log level"),
-                                      QStringLiteral("level"));
-    QCommandLineOption modelPathOption(QStringList{QStringLiteral("model-path")},
-                                       QStringLiteral("Override the configured Whisper model path"),
-                                       QStringLiteral("path"));
-    QCommandLineOption shortcutOption(QStringList{QStringLiteral("shortcut")},
-                                      QStringLiteral("Override the configured push-to-talk shortcut"),
-                                      QStringLiteral("sequence"));
-    QCommandLineOption languageOption(QStringList{QStringLiteral("language")},
-                                      QStringLiteral("Override the configured transcription language code or use auto-detect"),
-                                      QStringLiteral("code|auto"));
-    QCommandLineOption threadsOption(QStringList{QStringLiteral("threads")},
-                                     QStringLiteral("Override the configured transcription thread count"),
-                                     QStringLiteral("count"));
-    QCommandLineOption translateOption(QStringList{QStringLiteral("translate")},
-                                       QStringLiteral("Translate speech to English"));
-    QCommandLineOption noTranslateOption(QStringList{QStringLiteral("no-translate")},
-                                         QStringLiteral("Disable translation to English"));
-    QCommandLineOption warmupOption(QStringList{QStringLiteral("warmup-on-start")},
-                                    QStringLiteral("Warm up the transcriber during startup"));
-    QCommandLineOption noWarmupOption(QStringList{QStringLiteral("no-warmup-on-start")},
-                                      QStringLiteral("Disable transcriber warmup during startup"));
+    const QCommandLineOption configOption(QStringList{QStringLiteral("config")},
+                                          QStringLiteral("Path to the JSON config file"),
+                                          QStringLiteral("path"),
+                                          defaultConfigPath());
+    const QCommandLineOption logLevelOption(QStringList{QStringLiteral("log-level")},
+                                            QStringLiteral("Override the configured log level"),
+                                            QStringLiteral("level"));
+    const QCommandLineOption modelPathOption(QStringList{QStringLiteral("model-path")},
+                                             QStringLiteral("Override the configured Whisper model path"),
+                                             QStringLiteral("path"));
+    const QCommandLineOption shortcutOption(QStringList{QStringLiteral("shortcut")},
+                                            QStringLiteral("Override the configured push-to-talk shortcut"),
+                                            QStringLiteral("sequence"));
+    const QCommandLineOption languageOption(QStringList{QStringLiteral("language")},
+                                            QStringLiteral("Override the configured transcription language code or use auto-detect"),
+                                            QStringLiteral("code|auto"));
+    const QCommandLineOption threadsOption(QStringList{QStringLiteral("threads")},
+                                           QStringLiteral("Override the configured transcription thread count"),
+                                           QStringLiteral("count"));
+    const QCommandLineOption translateOption(QStringList{QStringLiteral("translate")},
+                                             QStringLiteral("Translate speech to English"));
+    const QCommandLineOption noTranslateOption(QStringList{QStringLiteral("no-translate")},
+                                               QStringLiteral("Disable translation to English"));
+    const QCommandLineOption warmupOption(QStringList{QStringLiteral("warmup-on-start")},
+                                          QStringLiteral("Warm up the transcriber during startup"));
+    const QCommandLineOption noWarmupOption(QStringList{QStringLiteral("no-warmup-on-start")},
+                                            QStringLiteral("Disable transcriber warmup during startup"));
     parser.addOption(configOption);
     parser.addOption(logLevelOption);
     parser.addOption(modelPathOption);
@@ -442,39 +442,39 @@ int main(int argc, char *argv[])
 
     QGuiApplication app(argc, argv);
     QGuiApplication::setDesktopFileName(QStringLiteral("org.mutterkey.mutterkey"));
-    app.setApplicationName(QStringLiteral("mutterkey"));
-    app.setApplicationDisplayName(QStringLiteral("Mutterkey"));
+    QGuiApplication::setApplicationName(QStringLiteral("mutterkey"));
+    QGuiApplication::setApplicationDisplayName(QStringLiteral("Mutterkey"));
 
     QCommandLineParser parser;
     configureCommandLineParser(&parser);
 
-    QCommandLineOption configOption(QStringList{QStringLiteral("config")},
-                                    QStringLiteral("Path to the JSON config file"),
-                                    QStringLiteral("path"),
-                                    defaultConfigPath());
-    QCommandLineOption logLevelOption(QStringList{QStringLiteral("log-level")},
-                                      QStringLiteral("Override the configured log level"),
-                                      QStringLiteral("level"));
-    QCommandLineOption modelPathOption(QStringList{QStringLiteral("model-path")},
-                                       QStringLiteral("Override the configured Whisper model path"),
-                                       QStringLiteral("path"));
-    QCommandLineOption shortcutOption(QStringList{QStringLiteral("shortcut")},
-                                      QStringLiteral("Override the configured push-to-talk shortcut"),
-                                      QStringLiteral("sequence"));
-    QCommandLineOption languageOption(QStringList{QStringLiteral("language")},
-                                      QStringLiteral("Override the configured transcription language code or use auto-detect"),
-                                      QStringLiteral("code|auto"));
-    QCommandLineOption threadsOption(QStringList{QStringLiteral("threads")},
-                                     QStringLiteral("Override the configured transcription thread count"),
-                                     QStringLiteral("count"));
-    QCommandLineOption translateOption(QStringList{QStringLiteral("translate")},
-                                       QStringLiteral("Translate speech to English"));
-    QCommandLineOption noTranslateOption(QStringList{QStringLiteral("no-translate")},
-                                         QStringLiteral("Disable translation to English"));
-    QCommandLineOption warmupOption(QStringList{QStringLiteral("warmup-on-start")},
-                                    QStringLiteral("Warm up the transcriber during startup"));
-    QCommandLineOption noWarmupOption(QStringList{QStringLiteral("no-warmup-on-start")},
-                                      QStringLiteral("Disable transcriber warmup during startup"));
+    const QCommandLineOption configOption(QStringList{QStringLiteral("config")},
+                                          QStringLiteral("Path to the JSON config file"),
+                                          QStringLiteral("path"),
+                                          defaultConfigPath());
+    const QCommandLineOption logLevelOption(QStringList{QStringLiteral("log-level")},
+                                            QStringLiteral("Override the configured log level"),
+                                            QStringLiteral("level"));
+    const QCommandLineOption modelPathOption(QStringList{QStringLiteral("model-path")},
+                                             QStringLiteral("Override the configured Whisper model path"),
+                                             QStringLiteral("path"));
+    const QCommandLineOption shortcutOption(QStringList{QStringLiteral("shortcut")},
+                                            QStringLiteral("Override the configured push-to-talk shortcut"),
+                                            QStringLiteral("sequence"));
+    const QCommandLineOption languageOption(QStringList{QStringLiteral("language")},
+                                            QStringLiteral("Override the configured transcription language code or use auto-detect"),
+                                            QStringLiteral("code|auto"));
+    const QCommandLineOption threadsOption(QStringList{QStringLiteral("threads")},
+                                           QStringLiteral("Override the configured transcription thread count"),
+                                           QStringLiteral("count"));
+    const QCommandLineOption translateOption(QStringList{QStringLiteral("translate")},
+                                             QStringLiteral("Translate speech to English"));
+    const QCommandLineOption noTranslateOption(QStringList{QStringLiteral("no-translate")},
+                                               QStringLiteral("Disable translation to English"));
+    const QCommandLineOption warmupOption(QStringList{QStringLiteral("warmup-on-start")},
+                                          QStringLiteral("Warm up the transcriber during startup"));
+    const QCommandLineOption noWarmupOption(QStringList{QStringLiteral("no-warmup-on-start")},
+                                            QStringLiteral("Disable transcriber warmup during startup"));
     parser.addOption(configOption);
     parser.addOption(logLevelOption);
     parser.addOption(modelPathOption);

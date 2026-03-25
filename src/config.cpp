@@ -1,22 +1,30 @@
 #include "config.h"
 
+#include <algorithm>
 #include <array>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QIODevice>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonParseError>
+#include <QJsonValue>
 #include <QLoggingCategory>
 #include <QSaveFile>
+#include <QStringView>
 #include <QStandardPaths>
+#include <QtCore/qstring.h>
+#include <QtCore/qstringfwd.h>
+#include <QtCore/qstringlist.h>
 
 extern "C" {
 #include <whisper.h>
 }
 
-Q_LOGGING_CATEGORY(configLog, "mutterkey.config")
-
 namespace {
+
+Q_STATIC_LOGGING_CATEGORY(configLog, "mutterkey.config")
 
 constexpr int kDefaultAudioSampleRate = 16000;
 constexpr int kDefaultAudioChannels = 1;
@@ -189,14 +197,16 @@ QString normalizedLogLevel(const QString &logLevel)
 
 bool isSupportedLogLevel(const QString &logLevel)
 {
-    static const QStringList kAllowedLevels{
-        QStringLiteral("DEBUG"),
-        QStringLiteral("INFO"),
-        QStringLiteral("WARNING"),
-        QStringLiteral("ERROR"),
+    constexpr std::array<QStringView, 4> kAllowedLevels{
+        QStringView{u"DEBUG"},
+        QStringView{u"INFO"},
+        QStringView{u"WARNING"},
+        QStringView{u"ERROR"},
     };
 
-    return kAllowedLevels.contains(logLevel);
+    return std::ranges::any_of(kAllowedLevels, [&logLevel](QStringView allowedLevel) {
+        return logLevel == allowedLevel;
+    });
 }
 
 bool setShortcutSequence(AppConfig *config, const QString &value, QString *errorMessage)
@@ -353,7 +363,7 @@ using ConfigSetter = bool (*)(AppConfig *config, const QString &value, QString *
 
 struct ConfigKeyHandler {
     QLatin1StringView key;
-    ConfigSetter setter;
+    ConfigSetter setter{};
 };
 
 constexpr std::array kConfigKeyHandlers{
@@ -521,7 +531,7 @@ QByteArray serializeConfig(const AppConfig &config)
 bool saveConfig(const QString &path, const AppConfig &config, QString *errorMessage)
 {
     const QFileInfo configFileInfo(path);
-    QDir directory;
+    const QDir directory;
     if (!directory.mkpath(configFileInfo.absolutePath())) {
         if (errorMessage != nullptr) {
             *errorMessage = QStringLiteral("Could not create config directory: %1").arg(configFileInfo.absolutePath());

@@ -30,22 +30,21 @@ bash scripts/check-release-hygiene.sh
 
 ```bash
 BUILD_DIR="$(mktemp -d /tmp/mutterkey-build-XXXXXX)"
-cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Debug
 ```
 
 - If the release is intended to ship an accelerated Whisper backend, configure
   the build with the relevant Mutterkey options:
 
 ```bash
-cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Debug -DMUTTERKEY_ENABLE_WHISPER_CUDA=ON
+cmake -S . -B "$BUILD_DIR" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DMUTTERKEY_ENABLE_WHISPER_CUDA=ON
 ```
 
 ```bash
-cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Debug -DMUTTERKEY_ENABLE_WHISPER_VULKAN=ON
+cmake -S . -B "$BUILD_DIR" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DMUTTERKEY_ENABLE_WHISPER_VULKAN=ON
 ```
 
 ```bash
-cmake -S . -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=Debug -DMUTTERKEY_ENABLE_WHISPER_BLAS=ON -DMUTTERKEY_WHISPER_BLAS_VENDOR=OpenBLAS
+cmake -S . -B "$BUILD_DIR" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DMUTTERKEY_ENABLE_WHISPER_BLAS=ON -DMUTTERKEY_WHISPER_BLAS_VENDOR=OpenBLAS
 ```
 
 - Acceleration option notes:
@@ -89,15 +88,6 @@ cmake --build "$BUILD_DIR" --target docs
 - Treat repo-owned Doxygen warnings as release blockers. Keep the Doxygen main
   page in `docs/mainpage.md` API-focused instead of pointing Doxygen at the
   full `README.md` unless the Doxygen input set is expanded deliberately.
-
-- For faster pre-release bug hunting, also consider a dedicated sanitizer build:
-
-```bash
-SANITIZER_BUILD_DIR="$(mktemp -d /tmp/mutterkey-sanitizer-build-XXXXXX)"
-cmake -S . -B "$SANITIZER_BUILD_DIR" -DCMAKE_BUILD_TYPE=Debug -DMUTTERKEY_ENABLE_ASAN=ON -DMUTTERKEY_ENABLE_UBSAN=ON
-cmake --build "$SANITIZER_BUILD_DIR" -j"$(nproc)"
-ctest --test-dir "$SANITIZER_BUILD_DIR" --output-on-failure
-```
 
 - Validate headless startup:
 

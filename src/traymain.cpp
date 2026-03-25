@@ -9,9 +9,9 @@
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
-    app.setApplicationName(QStringLiteral("mutterkey-tray"));
-    app.setApplicationDisplayName(QStringLiteral("Mutterkey Tray"));
-    app.setQuitOnLastWindowClosed(false);
+    QApplication::setApplicationName(QStringLiteral("mutterkey-tray"));
+    QApplication::setApplicationDisplayName(QStringLiteral("Mutterkey Tray"));
+    QApplication::setQuitOnLastWindowClosed(false);
 
     TrayStatusWindow statusWindow;
 
@@ -23,10 +23,10 @@ int main(int argc, char *argv[])
     QSystemTrayIcon trayIcon(icon);
     auto *menu = new QMenu;
 
-    QAction *showStatusAction = menu->addAction(QStringLiteral("Status"));
-    QAction *refreshAction = menu->addAction(QStringLiteral("Refresh"));
+    const QAction *showStatusAction = menu->addAction(QStringLiteral("Status"));
+    const QAction *refreshAction = menu->addAction(QStringLiteral("Refresh"));
     menu->addSeparator();
-    QAction *quitAction = menu->addAction(QStringLiteral("Quit"));
+    const QAction *quitAction = menu->addAction(QStringLiteral("Quit"));
 
     QObject::connect(showStatusAction, &QAction::triggered, &statusWindow, [&statusWindow]() {
         statusWindow.show();
@@ -51,5 +51,5 @@ int main(int argc, char *argv[])
     }
 
     statusWindow.refresh();
-    return app.exec();
+    return QApplication::exec();
 }

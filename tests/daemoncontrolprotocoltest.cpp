@@ -2,6 +2,8 @@
 
 #include <QtTest/QTest>
 
+namespace {
+
 class DaemonControlProtocolTest final : public QObject
 {
     Q_OBJECT
@@ -12,6 +14,8 @@ private slots:
     void rejectsUnknownMethod();
     void rejectsMissingRequestId();
 };
+
+} // namespace
 
 void DaemonControlProtocolTest::requestRoundTrip()
 {

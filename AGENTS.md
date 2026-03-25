@@ -76,6 +76,10 @@ If a sandboxed build fails with `ccache: error: Read-only file system`, treat
 that as an environment limitation rather than a repo regression and rerun the
 build with `CCACHE_DISABLE=1`.
 
+If a sandboxed build still routes through vendored `ggml`'s own `ccache`
+detection, also reconfigure with `GGML_CCACHE=OFF` before concluding the repo is
+broken.
+
 If the task affects install layout, licensing, or packaging, also validate a temporary install prefix:
 
 ```bash
@@ -119,6 +123,8 @@ Notes:
 ## Tooling Best Practices
 
 - Treat `clang-tidy` and `clazy` as repo-maintained checks, not optional extras; if a change introduces new warnings in repo-owned code, fix them or explain why they are being deferred
+- The repo-owned `clang-tidy` path is intentionally strict and now relies on `.clang-tidy` `RemovedArgs` support for `-mno-direct-extern-access` instead of rewriting `compile_commands.json`; prefer extending that config rather than adding more build-dir munging
+- Prefer `cmake --build "$BUILD_DIR" --target clang-tidy` in a real configured build tree when validating analyzer changes, because Qt test sources depend on generated `*_autogen` / `.moc` outputs that ad hoc one-off `clang-tidy` calls may not have available
 - Treat Valgrind Memcheck as the release memory gate and ASan/UBSan as the faster developer complements; they overlap, but they are not interchangeable
 - Treat the release-hygiene script and GitHub CI workflow as repo-maintained checks too; keep them passing when build inputs, docs, or repository metadata change
 - Treat the Doxygen `docs` target as a repo-maintained check too when touching repo-owned API docs or docs/CI wiring; repo-owned Doxygen warnings should be fixed rather than ignored
@@ -129,6 +135,7 @@ Notes:
 - Reconfigure the build directory after installing new tools so cached `find_program()` results are refreshed
 - When validating inside a restricted sandbox, be ready to disable `ccache` with `CCACHE_DISABLE=1` if the cache location is read-only; that is an execution-environment issue, not a Mutterkey build failure
 - Prefer fixing the code over weakening `.clang-tidy` or the Clazy check set; only relax tool config when the warning is clearly low-value for this repo
+- In this Qt-heavy repo, treat `misc-include-cleaner` and `readability-redundant-access-specifiers` as low-value `clang-tidy` noise unless the underlying tool behavior improves; they conflict with Qt header-provider reality and `signals` / `slots` / `Q_SLOTS` sectioning more than they improve safety
 - Do not add broad Valgrind suppressions by default; only add narrow suppressions after reproducing stable third-party noise and keep them clearly scoped
 - When adding tests, prefer small `Qt Test` cases that run headlessly under `CTest` and avoid microphone, clipboard, or KDE session dependencies unless the task is specifically integration-focused
 - For tool-driven cleanups, preserve the existing design and behavior; do not perform broad rewrites just to satisfy style-oriented recommendations
@@ -139,6 +146,8 @@ Notes:
 - Stay within the existing style and structure; do not reformat unrelated code
 - Prefer small, direct classes over adding abstraction layers without a concrete need
 - Keep Qt usage idiomatic: `QObject` ownership, signal/slot wiring, and `QThread` boundaries should remain explicit
+- Prefer `Q_STATIC_LOGGING_CATEGORY` for translation-unit-local logging categories instead of global `Q_LOGGING_CATEGORY` declarations when no cross-file declaration is needed
+- When refactoring Qt class declarations, remember that `moc` still cares about section structure: keep explicit `signals`, `slots`, `Q_SLOTS`, and access sections valid for Qt even if a generic style check suggests flattening them
 - Prefer explicit validation and safe fallback behavior for config-driven runtime values
 - Avoid introducing optional backends, plugin systems, or cross-platform abstractions unless the task requires them
 - Keep the audio path explicit: recorder output may not already match Whisper input requirements, so preserve normalization behavior
@@ -223,6 +232,7 @@ Typical model location:
 - Prefer expanding tests around pure parsing, value normalization, and other environment-independent logic before adding KDE-session or device-heavy coverage
 - Use `-DMUTTERKEY_ENABLE_ASAN=ON` and `-DMUTTERKEY_ENABLE_UBSAN=ON` for fast iteration on memory and UB bugs, and use the repo-owned Valgrind lane as the slower release-focused confirmation step
 - Run `clang-tidy` and `clazy` targets for non-trivial C++/Qt changes when the tools are installed in the environment
+- If `clang-tidy` validation needs Qt test `.moc` files, generate the relevant `*_autogen` targets first or just run the repo-owned `clang-tidy` target from a configured build tree
 - Run the `docs` target when touching repo-owned public headers, Doxygen comments, `docs/Doxyfile.in`, `docs/mainpage.md`, or CI/docs wiring
 - Prefer the `lint` target for a full pre-handoff analyzer pass, and use the individual analyzer targets when iterating on one class of warnings
 - Run `bash scripts/run-valgrind.sh "$BUILD_DIR"` before handoff when the task is specifically about memory, ownership, lifetime, shutdown, or release hardening

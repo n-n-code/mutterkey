@@ -14,25 +14,38 @@ if(NOT DEFINED CONFIG_FILE OR NOT EXISTS "${CONFIG_FILE}")
     message(FATAL_ERROR "clang-tidy config file was not found")
 endif()
 
-set(compile_commands_path "${BUILD_DIR}/compile_commands.json")
-file(READ "${compile_commands_path}" compile_commands_json)
-string(REPLACE " -mno-direct-extern-access" "" compile_commands_json "${compile_commands_json}")
-
-set(tidy_build_dir "${BUILD_DIR}/clang-tidy")
-file(MAKE_DIRECTORY "${tidy_build_dir}")
-file(WRITE "${tidy_build_dir}/compile_commands.json" "${compile_commands_json}")
-
 file(GLOB_RECURSE SOURCE_FILES LIST_DIRECTORIES FALSE
     "${SOURCE_DIR}/src/*.cpp"
     "${SOURCE_DIR}/tests/*.cpp"
 )
+
+list(LENGTH SOURCE_FILES source_file_count)
+if(source_file_count EQUAL 0)
+    message(FATAL_ERROR "No source files matched the clang-tidy target")
+endif()
+
+list(GET SOURCE_FILES 0 first_source_file)
+execute_process(
+    COMMAND "${TOOL_BIN}"
+        -p "${BUILD_DIR}"
+        --quiet
+        --config-file=${CONFIG_FILE}
+        --verify-config
+        "${first_source_file}"
+    WORKING_DIRECTORY "${SOURCE_DIR}"
+    RESULT_VARIABLE verify_result
+)
+if(NOT verify_result EQUAL 0)
+    message(FATAL_ERROR "clang-tidy configuration verification failed")
+endif()
 
 set(failed FALSE)
 foreach(source_file IN LISTS SOURCE_FILES)
     message(STATUS "Running clang-tidy on ${source_file}")
     execute_process(
         COMMAND "${TOOL_BIN}"
-            -p "${tidy_build_dir}"
+            -p "${BUILD_DIR}"
+            --quiet
             --config-file=${CONFIG_FILE}
             "${source_file}"
         WORKING_DIRECTORY "${SOURCE_DIR}"

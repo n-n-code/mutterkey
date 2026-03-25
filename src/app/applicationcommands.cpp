@@ -1,15 +1,25 @@
 #include "app/applicationcommands.h"
 
+#include "config.h"
 #include "audio/audiorecorder.h"
+#include "audio/recording.h"
 #include "clipboardwriter.h"
 #include "control/daemoncontrolserver.h"
 #include "service.h"
+#include "transcription/transcriptiontypes.h"
 #include "transcription/whispercpptranscriber.h"
 
+#include <QClipboard>
+#include <QCoreApplication>
 #include <QGuiApplication>
 #include <QJsonDocument>
+#include <QLoggingCategory>
+#include <QObject>
+#include <QString>
 #include <QTextStream>
 #include <QTimer>
+#include <QtLogging>
+#include <QtCore/qnamespace.h>
 
 Q_LOGGING_CATEGORY(appLog, "mutterkey.app")
 
@@ -26,7 +36,7 @@ void configureLogging(const QString &level)
 
 int runDaemon(QGuiApplication &app, const AppConfig &config, const QString &configPath)
 {
-    MutterkeyService service(config, app.clipboard());
+    MutterkeyService service(config, QGuiApplication::clipboard());
     DaemonControlServer controlServer(configPath, config, &service);
     QObject::connect(&app, &QCoreApplication::aboutToQuit, &service, &MutterkeyService::stop);
     QObject::connect(&app, &QCoreApplication::aboutToQuit, &controlServer, &DaemonControlServer::stop);
@@ -43,14 +53,14 @@ int runDaemon(QGuiApplication &app, const AppConfig &config, const QString &conf
     }
 
     qCInfo(appLog) << "Mutterkey daemon running. Hold" << config.shortcut.sequence << "to talk.";
-    return app.exec();
+    return QGuiApplication::exec();
 }
 
 int runOnce(QGuiApplication &app, const AppConfig &config, double seconds)
 {
     AudioRecorder recorder(config.audio);
     WhisperCppTranscriber transcriber(config.transcriber);
-    ClipboardWriter clipboardWriter(app.clipboard());
+    ClipboardWriter clipboardWriter(QGuiApplication::clipboard());
 
     if (config.transcriber.warmupOnStart) {
         QString warmupError;
@@ -64,7 +74,7 @@ int runOnce(QGuiApplication &app, const AppConfig &config, double seconds)
         QString errorMessage;
         if (!recorder.start(&errorMessage)) {
             qCCritical(appLog) << "Failed to start one-shot recording:" << errorMessage;
-            app.exit(1);
+            QGuiApplication::exit(1);
             return;
         }
 
@@ -73,14 +83,14 @@ int runOnce(QGuiApplication &app, const AppConfig &config, double seconds)
             const Recording recording = recorder.stop();
             if (!recording.isValid()) {
                 qCCritical(appLog) << "Recorder returned no audio";
-                app.exit(1);
+                QGuiApplication::exit(1);
                 return;
             }
 
             const TranscriptionResult result = transcriber.transcribe(recording);
             if (!result.success) {
                 qCCritical(appLog) << "One-shot transcription failed:" << result.error;
-                app.exit(1);
+                QGuiApplication::exit(1);
                 return;
             }
 
@@ -93,16 +103,16 @@ int runOnce(QGuiApplication &app, const AppConfig &config, double seconds)
             } else {
                 qCInfo(appLog) << "No speech detected";
             }
-            app.exit(0);
+            QGuiApplication::exit(0);
         });
     });
 
-    return app.exec();
+    return QGuiApplication::exec();
 }
 
 int runDiagnose(QGuiApplication &app, const AppConfig &config, double seconds, bool invokeShortcut)
 {
-    MutterkeyService service(config, app.clipboard());
+    MutterkeyService service(config, QGuiApplication::clipboard());
     QObject::connect(&app, &QCoreApplication::aboutToQuit, &service, &MutterkeyService::stop);
 
     QString errorMessage;
@@ -125,8 +135,8 @@ int runDiagnose(QGuiApplication &app, const AppConfig &config, double seconds, b
 
     QTimer::singleShot(static_cast<int>(seconds * 1000), &app, [&app, &service]() {
         QTextStream(stdout) << QJsonDocument(service.diagnostics()).toJson(QJsonDocument::Indented);
-        app.exit(0);
+        QGuiApplication::exit(0);
     });
 
-    return app.exec();
+    return QGuiApplication::exec();
 }

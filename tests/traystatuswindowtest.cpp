@@ -6,6 +6,8 @@
 #include <QPlainTextEdit>
 #include <QtTest/QTest>
 
+namespace {
+
 class FakeDaemonControlSession final : public DaemonControlSession
 {
 public:
@@ -39,6 +41,8 @@ private slots:
     void refreshShowsOfflineStateWhenConfigRequestFails();
 };
 
+} // namespace
+
 void TrayStatusWindowTest::refreshShowsOfflineStateWhenTransportFails()
 {
     FakeDaemonControlSession client;
@@ -46,7 +50,7 @@ void TrayStatusWindowTest::refreshShowsOfflineStateWhenTransportFails()
     statusResult.errorMessage = QStringLiteral("Connection refused");
     client.setStatusResult(statusResult);
 
-    TrayStatusWindow window(&client);
+    const TrayStatusWindow window(&client);
 
     auto *connectionValue = window.findChild<QLabel *>(QStringLiteral("connectionValue"));
     auto *configPathValue = window.findChild<QLabel *>(QStringLiteral("configPathValue"));
@@ -81,7 +85,7 @@ void TrayStatusWindowTest::refreshPopulatesValuesOnSuccessfulResponses()
     configResult.snapshot.config.transcriber.modelPath = QStringLiteral("/tmp/model.bin");
     client.setConfigResult(configResult);
 
-    TrayStatusWindow window(&client);
+    const TrayStatusWindow window(&client);
 
     auto *connectionValue = window.findChild<QLabel *>(QStringLiteral("connectionValue"));
     auto *configPathValue = window.findChild<QLabel *>(QStringLiteral("configPathValue"));
@@ -115,7 +119,7 @@ void TrayStatusWindowTest::refreshShowsOfflineStateWhenConfigRequestFails()
     configResult.errorMessage = QStringLiteral("Config unavailable");
     client.setConfigResult(configResult);
 
-    TrayStatusWindow window(&client);
+    const TrayStatusWindow window(&client);
 
     auto *connectionValue = window.findChild<QLabel *>(QStringLiteral("connectionValue"));
     auto *statusJsonView = window.findChild<QPlainTextEdit *>(QStringLiteral("statusJsonView"));

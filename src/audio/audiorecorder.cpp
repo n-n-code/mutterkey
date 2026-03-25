@@ -8,7 +8,11 @@
 
 #include <utility>
 
-Q_LOGGING_CATEGORY(audioLog, "mutterkey.audio")
+namespace {
+
+Q_STATIC_LOGGING_CATEGORY(audioLog, "mutterkey.audio")
+
+} // namespace
 
 AudioBufferDevice::AudioBufferDevice(QObject *parent)
     : QIODevice(parent)

@@ -3,6 +3,8 @@
 
 #include <QtTest/QTest>
 
+namespace {
+
 class CommandDispatchTest final : public QObject
 {
     Q_OBJECT
@@ -15,6 +17,8 @@ private slots:
     void configHelpTextMentionsSubcommands();
     void configHelpTextListsAllSupportedConfigKeys();
 };
+
+} // namespace
 
 void CommandDispatchTest::commandIndexSkipsGlobalOptionValues()
 {

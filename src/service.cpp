@@ -3,7 +3,11 @@
 #include <QLoggingCategory>
 #include <QMetaObject>
 
-Q_LOGGING_CATEGORY(serviceLog, "mutterkey.service")
+namespace {
+
+Q_STATIC_LOGGING_CATEGORY(serviceLog, "mutterkey.service")
+
+} // namespace
 
 MutterkeyService::MutterkeyService(const AppConfig &config, QClipboard *clipboard, QObject *parent)
     : QObject(parent)

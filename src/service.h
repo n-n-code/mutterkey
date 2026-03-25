@@ -6,11 +6,10 @@
 #include "hotkeymanager.h"
 #include "transcription/transcriptionworker.h"
 
+#include <QClipboard>
 #include <QJsonObject>
 #include <QObject>
 #include <QThread>
-
-class QClipboard;
 
 /**
  * @file
@@ -84,7 +83,7 @@ signals:
      */
     void transcriptionFailed(const QString &errorMessage);
 
-private slots:
+private Q_SLOTS:
     /**
      * @brief Starts audio capture when the shortcut is pressed.
      */

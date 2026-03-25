@@ -26,8 +26,7 @@ public:
      * @param parent Optional parent widget.
      */
     explicit TrayStatusWindow(DaemonControlSession *client = nullptr, QWidget *parent = nullptr);
-
-public slots:
+public Q_SLOTS:
     /**
      * @brief Refreshes the window from the daemon control API.
      */

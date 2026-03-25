@@ -32,7 +32,7 @@ QStringList rawArguments(std::span<char *const> arguments)
 {
     QStringList parsedArguments;
     parsedArguments.reserve(static_cast<qsizetype>(arguments.size()));
-    for (char *argument : arguments) {
+    for (const char *argument : arguments) {
         parsedArguments.append(QString::fromLocal8Bit(argument));
     }
     return parsedArguments;

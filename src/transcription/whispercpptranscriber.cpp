@@ -12,9 +12,9 @@ extern "C" {
 #include <whisper.h>
 }
 
-Q_LOGGING_CATEGORY(whisperCppLog, "mutterkey.transcriber.whispercpp")
-
 namespace {
+
+Q_STATIC_LOGGING_CATEGORY(whisperCppLog, "mutterkey.transcriber.whispercpp")
 
 QString backendDeviceTypeName(enum ggml_backend_dev_type type)
 {
@@ -170,7 +170,7 @@ bool WhisperCppTranscriber::ensureInitialized(QString *errorMessage)
         return false;
     }
 
-    whisper_context_params contextParams = whisper_context_default_params();
+    const whisper_context_params contextParams = whisper_context_default_params();
     qCInfo(whisperCppLog).noquote() << "ggml runtime:" << describeRegisteredBackends();
     m_context.reset(whisper_init_from_file_with_params(modelPath.toUtf8().constData(), contextParams));
     if (m_context == nullptr) {

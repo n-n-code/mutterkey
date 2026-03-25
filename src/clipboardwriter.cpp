@@ -6,7 +6,11 @@
 #include <QMimeData>
 #include <ksystemclipboard.h>
 
-Q_LOGGING_CATEGORY(clipboardLog, "mutterkey.clipboard")
+namespace {
+
+Q_STATIC_LOGGING_CATEGORY(clipboardLog, "mutterkey.clipboard")
+
+} // namespace
 
 ClipboardWriter::ClipboardWriter(QClipboard *clipboard, QObject *parent)
     : QObject(parent)

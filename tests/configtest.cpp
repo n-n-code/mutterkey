@@ -4,6 +4,8 @@
 #include <QTemporaryDir>
 #include <QtTest/QTest>
 
+namespace {
+
 class ConfigTest final : public QObject
 {
     Q_OBJECT
@@ -23,6 +25,8 @@ private slots:
     void applyConfigValueRejectsUnknownKeys();
 };
 
+} // namespace
+
 void ConfigTest::defaultAppConfigMatchesDocumentedDefaults()
 {
     const AppConfig config = defaultAppConfig();
@@ -41,7 +45,7 @@ void ConfigTest::defaultAppConfigMatchesDocumentedDefaults()
 
 void ConfigTest::loadConfigUsesDefaultsWhenFileIsMissing()
 {
-    QTemporaryDir tempDir;
+    const QTemporaryDir tempDir;
     QVERIFY(tempDir.isValid());
 
     QString errorMessage;
@@ -62,7 +66,7 @@ void ConfigTest::loadConfigUsesDefaultsWhenFileIsMissing()
 
 void ConfigTest::loadConfigAppliesJsonOverrides()
 {
-    QTemporaryDir tempDir;
+    const QTemporaryDir tempDir;
     QVERIFY(tempDir.isValid());
 
     const QString configPath = tempDir.filePath(QStringLiteral("config.json"));
@@ -116,7 +120,7 @@ void ConfigTest::loadConfigAppliesJsonOverrides()
 
 void ConfigTest::loadConfigRejectsInvalidValues()
 {
-    QTemporaryDir tempDir;
+    const QTemporaryDir tempDir;
     QVERIFY(tempDir.isValid());
 
     const QString configPath = tempDir.filePath(QStringLiteral("config.json"));
@@ -156,7 +160,7 @@ void ConfigTest::loadConfigRejectsInvalidValues()
 
 void ConfigTest::loadConfigReportsMalformedJson()
 {
-    QTemporaryDir tempDir;
+    const QTemporaryDir tempDir;
     QVERIFY(tempDir.isValid());
 
     const QString configPath = tempDir.filePath(QStringLiteral("config.json"));
@@ -180,7 +184,7 @@ void ConfigTest::loadConfigReportsMalformedJson()
 
 void ConfigTest::loadConfigIgnoresWrongJsonTypes()
 {
-    QTemporaryDir tempDir;
+    const QTemporaryDir tempDir;
     QVERIFY(tempDir.isValid());
 
     const QString configPath = tempDir.filePath(QStringLiteral("config.json"));
@@ -224,7 +228,7 @@ void ConfigTest::loadConfigIgnoresWrongJsonTypes()
 
 void ConfigTest::loadConfigTrimsImportantStringFields()
 {
-    QTemporaryDir tempDir;
+    const QTemporaryDir tempDir;
     QVERIFY(tempDir.isValid());
 
     const QString configPath = tempDir.filePath(QStringLiteral("config.json"));
@@ -254,7 +258,7 @@ void ConfigTest::loadConfigTrimsImportantStringFields()
 
 void ConfigTest::saveConfigRoundTripsResolvedValues()
 {
-    QTemporaryDir tempDir;
+    const QTemporaryDir tempDir;
     QVERIFY(tempDir.isValid());
 
     AppConfig config = defaultAppConfig();
@@ -292,7 +296,7 @@ void ConfigTest::saveConfigRoundTripsResolvedValues()
 
 void ConfigTest::saveConfigCreatesParentDirectory()
 {
-    QTemporaryDir tempDir;
+    const QTemporaryDir tempDir;
     QVERIFY(tempDir.isValid());
 
     const QString configPath = tempDir.filePath(QStringLiteral("nested/mutterkey/config.json"));

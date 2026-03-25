@@ -1,13 +1,23 @@
 #include "audio/recordingnormalizer.h"
 
+#include "audio/recording.h"
+#include "transcription/transcriptiontypes.h"
+
+#include <QByteArray>
 #include <QLoggingCategory>
+#include <QString>
+#include <QtCore/qstring.h>
+#include <QtCore/qtypes.h>
 
 #include <algorithm>
 #include <cmath>
-
-Q_LOGGING_CATEGORY(normalizerLog, "mutterkey.audio.normalizer")
+#include <cstddef>
+#include <utility>
+#include <vector>
 
 namespace {
+
+Q_STATIC_LOGGING_CATEGORY(normalizerLog, "mutterkey.audio.normalizer")
 
 //
 // PCM helpers
@@ -20,7 +30,8 @@ qint16 readLittleEndianSample(const QByteArray &pcmData, qsizetype byteOffset)
 {
     const auto firstByte = static_cast<quint16>(static_cast<unsigned char>(pcmData.at(byteOffset)));
     const auto secondByte = static_cast<quint16>(static_cast<unsigned char>(pcmData.at(byteOffset + 1)));
-    const auto combined = static_cast<quint16>(firstByte | (secondByte << 8));
+    const auto combined =
+        static_cast<quint16>(static_cast<quint32>(firstByte) | (static_cast<quint32>(secondByte) << 8U));
     return static_cast<qint16>(combined);
 }
 
@@ -37,7 +48,8 @@ std::vector<float> decodeMono(const Recording &recording)
         float mixedSample = 0.0f;
         for (int channel = 0; channel < channels; ++channel) {
             // Qt audio capture gives us interleaved little-endian PCM frames.
-            const qsizetype byteOffset = frameIndex * bytesPerFrame + static_cast<qsizetype>(channel) * kSampleBytes;
+            const qsizetype byteOffset =
+                (frameIndex * bytesPerFrame) + (static_cast<qsizetype>(channel) * kSampleBytes);
             const auto sample = readLittleEndianSample(recording.pcmData, byteOffset);
             mixedSample += static_cast<float>(sample) / 32768.0f;
         }
@@ -72,8 +84,9 @@ std::vector<float> resampleLinear(const std::vector<float> &samples, int inputSa
         const auto leftIndex = static_cast<size_t>(std::floor(sourcePosition));
         const size_t rightIndex = std::min(leftIndex + 1, samples.size() - 1);
         const double blend = sourcePosition - static_cast<double>(leftIndex);
-        const auto interpolated =
-            static_cast<float>((1.0 - blend) * samples[leftIndex] + blend * samples[rightIndex]);
+        const float leftSample = samples.at(leftIndex);
+        const float rightSample = samples.at(rightIndex);
+        const auto interpolated = static_cast<float>(((1.0 - blend) * leftSample) + (blend * rightSample));
         resampled.push_back(interpolated);
     }
 

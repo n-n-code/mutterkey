@@ -20,6 +20,11 @@ QString prettyJson(const QJsonObject &object)
 TrayStatusWindow::TrayStatusWindow(DaemonControlSession *client, QWidget *parent)
     : QWidget(parent)
     , m_session(client != nullptr ? client : &m_ownedSession)
+    , m_connectionValue(new QLabel(this))
+    , m_configPathValue(new QLabel(this))
+    , m_shortcutValue(new QLabel(this))
+    , m_modelPathValue(new QLabel(this))
+    , m_statusJsonView(new QPlainTextEdit(this))
 {
     setWindowTitle(QStringLiteral("Mutterkey Status"));
     resize(720, 480);
@@ -27,13 +32,9 @@ TrayStatusWindow::TrayStatusWindow(DaemonControlSession *client, QWidget *parent
     auto *layout = new QVBoxLayout(this);
     auto *formLayout = new QFormLayout;
 
-    m_connectionValue = new QLabel(this);
     m_connectionValue->setObjectName(QStringLiteral("connectionValue"));
-    m_configPathValue = new QLabel(this);
     m_configPathValue->setObjectName(QStringLiteral("configPathValue"));
-    m_shortcutValue = new QLabel(this);
     m_shortcutValue->setObjectName(QStringLiteral("shortcutValue"));
-    m_modelPathValue = new QLabel(this);
     m_modelPathValue->setObjectName(QStringLiteral("modelPathValue"));
 
     formLayout->addRow(QStringLiteral("Connection"), m_connectionValue);
@@ -41,7 +42,6 @@ TrayStatusWindow::TrayStatusWindow(DaemonControlSession *client, QWidget *parent
     formLayout->addRow(QStringLiteral("Shortcut"), m_shortcutValue);
     formLayout->addRow(QStringLiteral("Model path"), m_modelPathValue);
 
-    m_statusJsonView = new QPlainTextEdit(this);
     m_statusJsonView->setObjectName(QStringLiteral("statusJsonView"));
     m_statusJsonView->setReadOnly(true);
 

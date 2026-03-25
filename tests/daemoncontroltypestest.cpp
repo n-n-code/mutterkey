@@ -2,6 +2,8 @@
 
 #include <QtTest/QTest>
 
+namespace {
+
 class DaemonControlTypesTest final : public QObject
 {
     Q_OBJECT
@@ -11,6 +13,8 @@ private slots:
     void parseConfigSnapshot();
     void rejectMalformedStatusSnapshot();
 };
+
+} // namespace
 
 void DaemonControlTypesTest::parseStatusSnapshot()
 {

@@ -74,7 +74,7 @@ signals:
      */
     void shortcutReleased();
 
-private slots:
+private Q_SLOTS:
     /**
      * @brief Handles KDE global shortcut active-state changes.
      * @param action Action whose state changed.

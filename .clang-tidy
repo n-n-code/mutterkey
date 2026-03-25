@@ -1,20 +1,89 @@
 Checks: >-
+  -*,
   clang-analyzer-*,
   bugprone-*,
-  cppcoreguidelines-init-variables,
-  cppcoreguidelines-narrowing-conversions,
-  cppcoreguidelines-pro-bounds-array-to-pointer-decay,
-  cppcoreguidelines-pro-type-const-cast,
-  cppcoreguidelines-pro-type-reinterpret-cast,
+  cert-*,
+  concurrency-*,
+  cppcoreguidelines-*,
+  hicpp-*,
+  misc-*,
   cppcoreguidelines-special-member-functions,
   modernize-*,
   performance-*,
+  portability-*,
+  readability-avoid-return-with-void-value,
+  readability-braces-around-statements,
+  readability-container-contains,
+  readability-container-data-pointer,
   readability-container-size-empty,
   readability-delete-null-pointer,
+  readability-duplicate-include,
+  readability-else-after-return,
   readability-implicit-bool-conversion,
+  readability-make-member-function-const,
+  readability-math-missing-parentheses,
+  readability-misleading-indentation,
+  readability-misplaced-array-index,
+  readability-redundant-*,
+  readability-simplify-boolean-expr,
+  readability-static-accessed-through-instance,
+  readability-string-compare,
+  readability-suspicious-call-argument,
+  readability-use-anyofallof,
+  readability-use-std-min-max,
+  -clang-analyzer-fuchsia.*,
+  -clang-analyzer-optin.mpi.MPI-Checker,
+  -clang-analyzer-osx.*,
+  -clang-analyzer-webkit.*,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-avoid-const-or-ref-data-members,
+  -cppcoreguidelines-macro-usage,
+  -cppcoreguidelines-non-private-member-variables-in-classes,
+  -cppcoreguidelines-owning-memory,
+  -hicpp-function-size,
+  -hicpp-named-parameter,
+  -hicpp-uppercase-literal-suffix,
+  -misc-include-cleaner,
+  -misc-no-recursion,
+  -misc-non-private-member-variables-in-classes,
   -modernize-use-trailing-return-type,
-  -readability-magic-numbers
+  -modernize-use-auto,
+  -portability-avoid-pragma-once,
+  -readability-function-cognitive-complexity,
+  -readability-function-size,
+  -readability-identifier-length,
+  -readability-identifier-naming,
+  -readability-isolate-declaration,
+  -readability-magic-numbers,
+  -readability-redundant-access-specifiers
 HeaderFilterRegex: '(.*/)?(src|tests)/'
 ExcludeHeaderFilterRegex: '(.*/)?(third_party|[^/]*_autogen)/'
 FormatStyle: none
-WarningsAsErrors: ''
+SystemHeaders: false
+UseColor: true
+WarningsAsErrors: >-
+  clang-analyzer-*,
+  bugprone-*,
+  cert-*,
+  concurrency-*,
+  cppcoreguidelines-*,
+  hicpp-*,
+  misc-*,
+  modernize-*,
+  performance-*,
+  portability-*,
+  readability-*
+CheckOptions:
+  bugprone-narrowing-conversions.PedanticMode: 'true'
+  cppcoreguidelines-narrowing-conversions.PedanticMode: 'true'
+  misc-const-correctness.AnalyzePointers: 'true'
+  misc-const-correctness.AnalyzeReferences: 'true'
+  misc-const-correctness.AnalyzeValues: 'true'
+  misc-const-correctness.TransformPointersAsPointers: 'true'
+  misc-const-correctness.TransformReferences: 'true'
+  misc-const-correctness.TransformValues: 'true'
+  misc-const-correctness.WarnPointersAsPointers: 'true'
+  modernize-use-integer-sign-comparison.EnableQtSupport: 'true'
+  performance-for-range-copy.WarnOnAllAutoCopies: 'true'
+RemovedArgs:
+  - -mno-direct-extern-access

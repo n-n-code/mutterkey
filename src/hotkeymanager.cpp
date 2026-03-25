@@ -9,15 +9,17 @@
 
 #include <utility>
 
-Q_LOGGING_CATEGORY(hotkeyLog, "mutterkey.hotkey")
-
 namespace {
+
+Q_STATIC_LOGGING_CATEGORY(hotkeyLog, "mutterkey.hotkey")
 
 QJsonArray sequenceToJson(const QKeySequence &sequence)
 {
     QJsonArray array;
-    for (int index = 0; index < sequence.count(); ++index) {
-        array.append(sequence[index].toCombined());
+    const QStringList parts =
+        sequence.toString(QKeySequence::PortableText).split(QStringLiteral(", "), Qt::SkipEmptyParts);
+    for (const QString &part : parts) {
+        array.append(part);
     }
     return array;
 }
