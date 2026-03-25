@@ -58,7 +58,13 @@ jobs:
           test -x "$INSTALL_DIR/bin/mutterkey-tray"
 
       - name: Validate headless tray startup
-        run: timeout 2s env QT_QPA_PLATFORM=offscreen ./build/mutterkey-tray
+        run: |
+          if timeout 2s env QT_QPA_PLATFORM=offscreen ./build/mutterkey-tray; then
+            exit 0
+          else
+            status=$?
+            test "$status" -eq 124
+          fi
 
       - name: Run Valgrind Memcheck lane
         run: bash scripts/run-valgrind.sh build
