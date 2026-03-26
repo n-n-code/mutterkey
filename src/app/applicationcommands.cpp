@@ -36,7 +36,8 @@ void configureLogging(const QString &level)
 
 int runDaemon(QGuiApplication &app, const AppConfig &config, const QString &configPath)
 {
-    MutterkeyService service(config, QGuiApplication::clipboard());
+    const std::shared_ptr<const TranscriptionEngine> transcriptionEngine = createTranscriptionEngine(config.transcriber);
+    MutterkeyService service(config, transcriptionEngine, QGuiApplication::clipboard());
     DaemonControlServer controlServer(configPath, config, &service);
     QObject::connect(&app, &QCoreApplication::aboutToQuit, &service, &MutterkeyService::stop);
     QObject::connect(&app, &QCoreApplication::aboutToQuit, &controlServer, &DaemonControlServer::stop);
@@ -59,14 +60,14 @@ int runDaemon(QGuiApplication &app, const AppConfig &config, const QString &conf
 int runOnce(QGuiApplication &app, const AppConfig &config, double seconds)
 {
     AudioRecorder recorder(config.audio);
-    const std::unique_ptr<TranscriptionEngine> transcriptionEngine = createTranscriptionEngine(config.transcriber);
+    const std::shared_ptr<const TranscriptionEngine> transcriptionEngine = createTranscriptionEngine(config.transcriber);
     std::unique_ptr<TranscriptionSession> transcriber = transcriptionEngine->createSession();
     ClipboardWriter clipboardWriter(QGuiApplication::clipboard());
 
     if (config.transcriber.warmupOnStart) {
-        QString warmupError;
-        if (!transcriber->warmup(&warmupError)) {
-            qCCritical(appLog) << "Failed to warm up transcriber:" << warmupError;
+        RuntimeError runtimeError;
+        if (!transcriber->warmup(&runtimeError)) {
+            qCCritical(appLog) << "Failed to warm up transcriber:" << runtimeError.message;
             return 1;
         }
     }
@@ -90,7 +91,7 @@ int runOnce(QGuiApplication &app, const AppConfig &config, double seconds)
 
             const TranscriptionResult result = transcriber->transcribe(recording);
             if (!result.success) {
-                qCCritical(appLog) << "One-shot transcription failed:" << result.error;
+                qCCritical(appLog) << "One-shot transcription failed:" << result.error.message;
                 QGuiApplication::exit(1);
                 return;
             }
@@ -113,7 +114,8 @@ int runOnce(QGuiApplication &app, const AppConfig &config, double seconds)
 
 int runDiagnose(QGuiApplication &app, const AppConfig &config, double seconds, bool invokeShortcut)
 {
-    MutterkeyService service(config, QGuiApplication::clipboard());
+    const std::shared_ptr<const TranscriptionEngine> transcriptionEngine = createTranscriptionEngine(config.transcriber);
+    MutterkeyService service(config, transcriptionEngine, QGuiApplication::clipboard());
     QObject::connect(&app, &QCoreApplication::aboutToQuit, &service, &MutterkeyService::stop);
 
     QString errorMessage;

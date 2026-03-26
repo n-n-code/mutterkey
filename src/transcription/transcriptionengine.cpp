@@ -2,7 +2,6 @@
 
 #include "transcription/whispercpptranscriber.h"
 
-#include <memory>
 #include <utility>
 
 namespace {
@@ -15,9 +14,9 @@ public:
     {
     }
 
-    [[nodiscard]] QString backendName() const override
+    [[nodiscard]] BackendCapabilities capabilities() const override
     {
-        return WhisperCppTranscriber::backendNameStatic();
+        return WhisperCppTranscriber::capabilitiesStatic();
     }
 
     [[nodiscard]] std::unique_ptr<TranscriptionSession> createSession() const override
@@ -31,7 +30,7 @@ private:
 
 } // namespace
 
-std::unique_ptr<TranscriptionEngine> createTranscriptionEngine(const TranscriberConfig &config)
+std::shared_ptr<const TranscriptionEngine> createTranscriptionEngine(const TranscriberConfig &config)
 {
-    return std::make_unique<WhisperCppTranscriptionEngine>(config);
+    return std::make_shared<WhisperCppTranscriptionEngine>(config);
 }
