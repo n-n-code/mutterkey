@@ -2,6 +2,7 @@
 
 #include "audio/recordingnormalizer.h"
 #include "config.h"
+#include "transcription/transcriptionengine.h"
 #include "transcription/transcriptiontypes.h"
 
 #include <memory>
@@ -20,7 +21,7 @@ struct whisper_context;
  * RAII-managed smart pointer so service shutdown and worker teardown stay
  * deterministic.
  */
-class WhisperCppTranscriber final
+class WhisperCppTranscriber final : public TranscriptionSession
 {
 public:
     /**
@@ -32,7 +33,7 @@ public:
     /**
      * @brief Releases the owned whisper.cpp context.
      */
-    ~WhisperCppTranscriber();
+    ~WhisperCppTranscriber() override;
 
     WhisperCppTranscriber(const WhisperCppTranscriber &) = delete;
     WhisperCppTranscriber &operator=(const WhisperCppTranscriber &) = delete;
@@ -43,21 +44,22 @@ public:
      * @brief Returns the backend name used in diagnostics.
      * @return Human-readable backend identifier.
      */
-    [[nodiscard]] static QString backendName();
+    [[nodiscard]] static QString backendNameStatic();
+    [[nodiscard]] QString backendName() const override;
 
     /**
      * @brief Eagerly initializes the whisper.cpp context.
      * @param errorMessage Optional output for initialization failures.
      * @return `true` when the backend is ready for transcription.
      */
-    bool warmup(QString *errorMessage = nullptr);
+    bool warmup(QString *errorMessage = nullptr) override;
 
     /**
      * @brief Normalizes and transcribes one captured recording.
      * @param recording Captured audio payload and format metadata.
      * @return Structured transcription result.
      */
-    [[nodiscard]] TranscriptionResult transcribe(const Recording &recording);
+    [[nodiscard]] TranscriptionResult transcribe(const Recording &recording) override;
 
 private:
     /**

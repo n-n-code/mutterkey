@@ -6,8 +6,8 @@
 #include "clipboardwriter.h"
 #include "control/daemoncontrolserver.h"
 #include "service.h"
+#include "transcription/transcriptionengine.h"
 #include "transcription/transcriptiontypes.h"
-#include "transcription/whispercpptranscriber.h"
 
 #include <QClipboard>
 #include <QCoreApplication>
@@ -59,18 +59,19 @@ int runDaemon(QGuiApplication &app, const AppConfig &config, const QString &conf
 int runOnce(QGuiApplication &app, const AppConfig &config, double seconds)
 {
     AudioRecorder recorder(config.audio);
-    WhisperCppTranscriber transcriber(config.transcriber);
+    const std::unique_ptr<TranscriptionEngine> transcriptionEngine = createTranscriptionEngine(config.transcriber);
+    std::unique_ptr<TranscriptionSession> transcriber = transcriptionEngine->createSession();
     ClipboardWriter clipboardWriter(QGuiApplication::clipboard());
 
     if (config.transcriber.warmupOnStart) {
         QString warmupError;
-        if (!transcriber.warmup(&warmupError)) {
+        if (!transcriber->warmup(&warmupError)) {
             qCCritical(appLog) << "Failed to warm up transcriber:" << warmupError;
             return 1;
         }
     }
 
-    QTimer::singleShot(0, &app, [&app, &recorder, &transcriber, &clipboardWriter, seconds]() {
+    QTimer::singleShot(0, &app, [&app, &recorder, transcriber = transcriber.get(), &clipboardWriter, seconds]() {
         QString errorMessage;
         if (!recorder.start(&errorMessage)) {
             qCCritical(appLog) << "Failed to start one-shot recording:" << errorMessage;
@@ -79,7 +80,7 @@ int runOnce(QGuiApplication &app, const AppConfig &config, double seconds)
         }
 
         qCInfo(appLog) << "Recording for" << seconds << "seconds";
-        QTimer::singleShot(static_cast<int>(seconds * 1000), &app, [&app, &recorder, &transcriber, &clipboardWriter]() {
+        QTimer::singleShot(static_cast<int>(seconds * 1000), &app, [&app, &recorder, transcriber, &clipboardWriter]() {
             const Recording recording = recorder.stop();
             if (!recording.isValid()) {
                 qCCritical(appLog) << "Recorder returned no audio";
@@ -87,7 +88,7 @@ int runOnce(QGuiApplication &app, const AppConfig &config, double seconds)
                 return;
             }
 
-            const TranscriptionResult result = transcriber.transcribe(recording);
+            const TranscriptionResult result = transcriber->transcribe(recording);
             if (!result.success) {
                 qCCritical(appLog) << "One-shot transcription failed:" << result.error;
                 QGuiApplication::exit(1);
