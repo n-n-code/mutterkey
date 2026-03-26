@@ -19,9 +19,15 @@ public:
         return WhisperCppTranscriber::capabilitiesStatic();
     }
 
-    [[nodiscard]] std::unique_ptr<TranscriptionSession> createSession() const override
+    [[nodiscard]] std::shared_ptr<const TranscriptionModelHandle> loadModel(RuntimeError *error) const override
     {
-        return std::make_unique<WhisperCppTranscriber>(m_config);
+        return WhisperCppTranscriber::loadModelHandle(m_config, error);
+    }
+
+    [[nodiscard]] std::unique_ptr<TranscriptionSession>
+    createSession(std::shared_ptr<const TranscriptionModelHandle> model) const override
+    {
+        return WhisperCppTranscriber::createSession(m_config, std::move(model));
     }
 
 private:

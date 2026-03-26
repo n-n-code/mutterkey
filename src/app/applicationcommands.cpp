@@ -61,11 +61,21 @@ int runOnce(QGuiApplication &app, const AppConfig &config, double seconds)
 {
     AudioRecorder recorder(config.audio);
     const std::shared_ptr<const TranscriptionEngine> transcriptionEngine = createTranscriptionEngine(config.transcriber);
-    std::unique_ptr<TranscriptionSession> transcriber = transcriptionEngine->createSession();
+    RuntimeError runtimeError;
+    const std::shared_ptr<const TranscriptionModelHandle> model = transcriptionEngine->loadModel(&runtimeError);
+    if (model == nullptr) {
+        qCCritical(appLog) << "Failed to load transcription model:" << runtimeError.message;
+        return 1;
+    }
+
+    std::unique_ptr<TranscriptionSession> transcriber = transcriptionEngine->createSession(model);
+    if (transcriber == nullptr) {
+        qCCritical(appLog) << "Failed to create transcription session";
+        return 1;
+    }
     ClipboardWriter clipboardWriter(QGuiApplication::clipboard());
 
     if (config.transcriber.warmupOnStart) {
-        RuntimeError runtimeError;
         if (!transcriber->warmup(&runtimeError)) {
             qCCritical(appLog) << "Failed to warm up transcriber:" << runtimeError.message;
             return 1;

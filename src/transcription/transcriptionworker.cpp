@@ -38,13 +38,27 @@ BackendCapabilities TranscriptionWorker::capabilities() const
     return m_capabilities;
 }
 
+QString TranscriptionWorker::loadedModelDescription() const
+{
+    if (m_model == nullptr) {
+        return {};
+    }
+
+    return m_model->modelDescription();
+}
+
 bool TranscriptionWorker::warmup(RuntimeError *error)
 {
     if (!ensureSession(error)) {
         return false;
     }
 
-    return m_transcriber->warmup(error);
+    const bool ready = m_transcriber->warmup(error);
+    if (!ready && (error == nullptr || shouldDiscardSession(*error))) {
+        m_transcriber.reset();
+    }
+
+    return ready;
 }
 
 void TranscriptionWorker::transcribe(const Recording &recording)
@@ -57,6 +71,9 @@ void TranscriptionWorker::transcribe(const Recording &recording)
 
     const TranscriptionResult result = m_transcriber->transcribe(recording);
     if (!result.success) {
+        if (shouldDiscardSession(result.error)) {
+            m_transcriber.reset();
+        }
         emit transcriptionFailed(result.error);
         return;
     }
@@ -70,6 +87,10 @@ bool TranscriptionWorker::ensureSession(RuntimeError *error)
         return true;
     }
 
+    if (!ensureModel(error)) {
+        return false;
+    }
+
     if (m_engine == nullptr) {
         if (error != nullptr) {
             *error = makeRuntimeError(RuntimeErrorCode::InternalRuntimeError,
@@ -78,7 +99,7 @@ bool TranscriptionWorker::ensureSession(RuntimeError *error)
         return false;
     }
 
-    m_transcriber = m_engine->createSession();
+    m_transcriber = m_engine->createSession(m_model);
     if (m_transcriber == nullptr) {
         if (error != nullptr) {
             *error = makeRuntimeError(RuntimeErrorCode::InternalRuntimeError,
@@ -86,5 +107,38 @@ bool TranscriptionWorker::ensureSession(RuntimeError *error)
         }
         return false;
     }
+    return true;
+}
+
+bool TranscriptionWorker::ensureModel(RuntimeError *error)
+{
+    if (m_model != nullptr) {
+        return true;
+    }
+
+    if (m_engine == nullptr) {
+        return true;
+    }
+
+    m_model = m_engine->loadModel(error);
+    return m_model != nullptr;
+}
+
+bool TranscriptionWorker::shouldDiscardSession(const RuntimeError &error)
+{
+    switch (error.code) {
+    case RuntimeErrorCode::Cancelled:
+    case RuntimeErrorCode::ModelLoadFailed:
+    case RuntimeErrorCode::DecodeFailed:
+    case RuntimeErrorCode::InternalRuntimeError:
+        return true;
+    case RuntimeErrorCode::None:
+    case RuntimeErrorCode::InvalidConfig:
+    case RuntimeErrorCode::ModelNotFound:
+    case RuntimeErrorCode::AudioNormalizationFailed:
+    case RuntimeErrorCode::UnsupportedLanguage:
+        return false;
+    }
+
     return true;
 }

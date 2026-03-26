@@ -52,6 +52,12 @@ public:
     [[nodiscard]] BackendCapabilities capabilities() const;
 
     /**
+     * @brief Returns the currently loaded model description, if available.
+     * @return Human-readable loaded model description or an empty string.
+     */
+    [[nodiscard]] QString loadedModelDescription() const;
+
+    /**
      * @brief Eagerly initializes backend state before the first real transcription.
      * @param error Optional output for warmup failures.
      * @return `true` when the backend is ready for use.
@@ -78,10 +84,15 @@ signals:
     void transcriptionFailed(const RuntimeError &error);
 
 private:
+    static bool shouldDiscardSession(const RuntimeError &error);
+
+    bool ensureModel(RuntimeError *error = nullptr);
     bool ensureSession(RuntimeError *error = nullptr);
 
     /// Shared immutable engine used to create the live session lazily on the worker thread.
     std::shared_ptr<const TranscriptionEngine> m_engine;
+    /// Shared immutable loaded model handle reused across session instances.
+    std::shared_ptr<const TranscriptionModelHandle> m_model;
     /// Capability snapshot reported even before the first session exists.
     BackendCapabilities m_capabilities;
     /// Owned transcription backend implementation.

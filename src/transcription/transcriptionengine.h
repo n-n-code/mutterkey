@@ -13,6 +13,37 @@ struct Recording;
  */
 
 /**
+ * @brief Immutable loaded-model interface created by a transcription engine.
+ *
+ * Handles own validated backend assets and may be shared across multiple
+ * independent sessions without exposing backend-specific state to app code.
+ */
+class TranscriptionModelHandle
+{
+public:
+    virtual ~TranscriptionModelHandle() = default;
+    TranscriptionModelHandle(const TranscriptionModelHandle &) = delete;
+    TranscriptionModelHandle &operator=(const TranscriptionModelHandle &) = delete;
+    TranscriptionModelHandle(TranscriptionModelHandle &&) = delete;
+    TranscriptionModelHandle &operator=(TranscriptionModelHandle &&) = delete;
+
+    /**
+     * @brief Returns the backend identifier for this loaded model.
+     * @return Short backend name used in diagnostics.
+     */
+    [[nodiscard]] virtual QString backendName() const = 0;
+
+    /**
+     * @brief Returns a human-readable description of the loaded model.
+     * @return Diagnostic model description such as the resolved model path.
+     */
+    [[nodiscard]] virtual QString modelDescription() const = 0;
+
+protected:
+    TranscriptionModelHandle() = default;
+};
+
+/**
  * @brief Mutable per-session transcription interface.
  *
  * Sessions own backend state that may be warmed up, reused, and kept isolated
@@ -47,6 +78,14 @@ public:
      */
     [[nodiscard]] virtual TranscriptionResult transcribe(const Recording &recording) = 0;
 
+    /**
+     * @brief Requests cooperative cancellation of any active decode.
+     *
+     * Implementations should stop in-flight backend work best-effort without
+     * using thread interruption.
+     */
+    virtual void cancel() = 0;
+
 protected:
     TranscriptionSession() = default;
 };
@@ -73,10 +112,19 @@ public:
     [[nodiscard]] virtual BackendCapabilities capabilities() const = 0;
 
     /**
-     * @brief Creates a new isolated transcription session.
-     * @return Newly constructed session that owns its backend state.
+     * @brief Loads an immutable validated model handle for this engine.
+     * @param error Optional destination for a structured failure reason.
+     * @return Shared loaded-model handle suitable for multiple sessions.
      */
-    [[nodiscard]] virtual std::unique_ptr<TranscriptionSession> createSession() const = 0;
+    [[nodiscard]] virtual std::shared_ptr<const TranscriptionModelHandle> loadModel(RuntimeError *error = nullptr) const = 0;
+
+    /**
+     * @brief Creates a new isolated transcription session from a loaded model.
+     * @param model Shared immutable model handle created by this engine.
+     * @return Newly constructed session that owns only mutable backend state.
+     */
+    [[nodiscard]] virtual std::unique_ptr<TranscriptionSession>
+    createSession(std::shared_ptr<const TranscriptionModelHandle> model) const = 0;
 
 protected:
     TranscriptionEngine() = default;
