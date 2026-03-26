@@ -18,10 +18,6 @@
 #include <QtCore/qstringfwd.h>
 #include <QtCore/qstringlist.h>
 
-extern "C" {
-#include <whisper.h>
-}
-
 namespace {
 
 Q_LOGGING_CATEGORY(configLog, "mutterkey.config")
@@ -80,39 +76,6 @@ QString sanitizedNonEmptyString(const QString &value)
 QString normalizedLanguageValue(const QString &value)
 {
     return value.trimmed().toLower();
-}
-
-bool resolveWhisperLanguage(const QString &value, QString *resolvedLanguage)
-{
-    const QString normalizedValue = normalizedLanguageValue(value);
-    if (normalizedValue.isEmpty()) {
-        return false;
-    }
-
-    if (normalizedValue == QStringLiteral("auto")) {
-        if (resolvedLanguage != nullptr) {
-            *resolvedLanguage = normalizedValue;
-        }
-        return true;
-    }
-
-    for (int languageId = 0; languageId <= whisper_lang_max_id(); ++languageId) {
-        const char *languageCode = whisper_lang_str(languageId);
-        const char *languageName = whisper_lang_str_full(languageId);
-        if (languageCode == nullptr) {
-            continue;
-        }
-
-        if (normalizedValue == QString::fromUtf8(languageCode)
-            || (languageName != nullptr && normalizedValue == QString::fromUtf8(languageName))) {
-            if (resolvedLanguage != nullptr) {
-                *resolvedLanguage = QString::fromUtf8(languageCode);
-            }
-            return true;
-        }
-    }
-
-    return false;
 }
 
 bool parseBoolValue(const QString &value, bool *parsedValue)
@@ -290,15 +253,15 @@ bool setModelPath(AppConfig *config, const QString &value, QString *errorMessage
 
 bool setLanguage(AppConfig *config, const QString &value, QString *errorMessage)
 {
-    QString resolvedLanguage;
-    if (!resolveWhisperLanguage(value, &resolvedLanguage)) {
+    const QString normalizedLanguage = normalizedLanguageValue(value);
+    if (normalizedLanguage.isEmpty()) {
         if (errorMessage != nullptr) {
-            *errorMessage = QStringLiteral("transcriber.language must be \"auto\" or a supported Whisper language code");
+            *errorMessage = QStringLiteral("transcriber.language may not be empty");
         }
         return false;
     }
 
-    config->transcriber.language = resolvedLanguage;
+    config->transcriber.language = normalizedLanguage;
     return true;
 }
 
@@ -436,15 +399,15 @@ AppConfig loadConfigObject(const QJsonObject &root, const QString &sourceName)
         config.transcriber.modelPath = modelPath;
     }
     config.transcriber.language = readString(transcriber, QStringLiteral("language"), config.transcriber.language);
-    QString resolvedLanguage;
-    if (resolveWhisperLanguage(config.transcriber.language, &resolvedLanguage)) {
-        config.transcriber.language = resolvedLanguage;
-    } else {
+    const QString normalizedLanguage = normalizedLanguageValue(config.transcriber.language);
+    if (normalizedLanguage.isEmpty()) {
         warnAboutInvalidValue(sourceName,
                               QStringLiteral("transcriber.language"),
-                              QStringLiteral("unsupported Whisper language"),
+                              QStringLiteral("value is empty"),
                               defaultAppConfig().transcriber.language);
         config.transcriber.language = defaultAppConfig().transcriber.language;
+    } else {
+        config.transcriber.language = normalizedLanguage;
     }
     config.transcriber.translate = readBool(transcriber, QStringLiteral("translate"), config.transcriber.translate);
     config.transcriber.threads = validatedThreads(sourceName, readInt(transcriber, QStringLiteral("threads"), config.transcriber.threads));

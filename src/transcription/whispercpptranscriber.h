@@ -45,14 +45,20 @@ public:
      * @return Human-readable backend identifier.
      */
     [[nodiscard]] static QString backendNameStatic();
+
+    /**
+     * @brief Returns the static capability snapshot for the whisper.cpp runtime.
+     * @return Capability data derived from the embedded backend integration.
+     */
+    [[nodiscard]] static BackendCapabilities capabilitiesStatic();
     [[nodiscard]] QString backendName() const override;
 
     /**
      * @brief Eagerly initializes the whisper.cpp context.
-     * @param errorMessage Optional output for initialization failures.
+     * @param error Optional output for initialization failures.
      * @return `true` when the backend is ready for transcription.
      */
-    bool warmup(QString *errorMessage = nullptr) override;
+    bool warmup(RuntimeError *error = nullptr) override;
 
     /**
      * @brief Normalizes and transcribes one captured recording.
@@ -70,10 +76,10 @@ private:
 
     /**
      * @brief Initializes the backend on first use.
-     * @param errorMessage Optional output for initialization failures.
+     * @param error Optional output for initialization failures.
      * @return `true` when the backend context is available.
      */
-    bool ensureInitialized(QString *errorMessage = nullptr);
+    bool ensureInitialized(RuntimeError *error = nullptr);
 
     /// Immutable whisper.cpp runtime configuration.
     TranscriberConfig m_config;

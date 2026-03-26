@@ -1,7 +1,6 @@
 #pragma once
 
 #include "audio/recording.h"
-#include "config.h"
 #include "transcription/transcriptionengine.h"
 
 #include <QObject>
@@ -25,11 +24,11 @@ class TranscriptionWorker final : public QObject
 
 public:
     /**
-     * @brief Creates a worker with a fixed backend configuration.
-     * @param config Transcriber settings copied into the owned backend.
+     * @brief Creates a worker with a shared immutable engine.
+     * @param engine Shared engine used to lazily create the live session.
      * @param parent Optional QObject parent.
      */
-    explicit TranscriptionWorker(const TranscriberConfig &config, QObject *parent = nullptr);
+    explicit TranscriptionWorker(std::shared_ptr<const TranscriptionEngine> engine, QObject *parent = nullptr);
     /**
      * @brief Creates a worker around an already-constructed session.
      * @param transcriber Owned session implementation.
@@ -47,11 +46,17 @@ public:
     [[nodiscard]] QString backendName() const;
 
     /**
+     * @brief Returns the active runtime capability snapshot.
+     * @return Capability data for diagnostics and orchestration decisions.
+     */
+    [[nodiscard]] BackendCapabilities capabilities() const;
+
+    /**
      * @brief Eagerly initializes backend state before the first real transcription.
-     * @param errorMessage Optional output for warmup failures.
+     * @param error Optional output for warmup failures.
      * @return `true` when the backend is ready for use.
      */
-    bool warmup(QString *errorMessage = nullptr);
+    bool warmup(RuntimeError *error = nullptr);
 
     /**
      * @brief Transcribes a captured recording and emits a result signal.
@@ -68,11 +73,17 @@ signals:
 
     /**
      * @brief Emitted when transcription fails.
-     * @param errorMessage Human-readable failure description.
+     * @param error Structured failure description.
      */
-    void transcriptionFailed(const QString &errorMessage);
+    void transcriptionFailed(const RuntimeError &error);
 
 private:
+    bool ensureSession(RuntimeError *error = nullptr);
+
+    /// Shared immutable engine used to create the live session lazily on the worker thread.
+    std::shared_ptr<const TranscriptionEngine> m_engine;
+    /// Capability snapshot reported even before the first session exists.
+    BackendCapabilities m_capabilities;
     /// Owned transcription backend implementation.
     std::unique_ptr<TranscriptionSession> m_transcriber;
 };

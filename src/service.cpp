@@ -2,6 +2,8 @@
 
 #include <QLoggingCategory>
 #include <QMetaObject>
+#include <QMetaType>
+#include <utility>
 
 namespace {
 
@@ -9,13 +11,19 @@ Q_LOGGING_CATEGORY(serviceLog, "mutterkey.service")
 
 } // namespace
 
-MutterkeyService::MutterkeyService(const AppConfig &config, QClipboard *clipboard, QObject *parent)
+MutterkeyService::MutterkeyService(const AppConfig &config,
+                                   std::shared_ptr<const TranscriptionEngine> transcriptionEngine,
+                                   QClipboard *clipboard,
+                                   QObject *parent)
     : QObject(parent)
     , m_config(config)
     , m_audioRecorder(config.audio, this)
+    , m_transcriptionEngine(std::move(transcriptionEngine))
     , m_clipboardWriter(clipboard, this)
     , m_hotkeyManager(config.shortcut, this)
 {
+    Q_ASSERT(m_transcriptionEngine != nullptr);
+    qRegisterMetaType<RuntimeError>("RuntimeError");
     connect(&m_hotkeyManager, &HotkeyManager::shortcutPressed, this, &MutterkeyService::onShortcutPressed);
     connect(&m_hotkeyManager, &HotkeyManager::shortcutReleased, this, &MutterkeyService::onShortcutReleased);
 }
@@ -72,6 +80,11 @@ QJsonObject MutterkeyService::diagnostics() const
     object.insert(QStringLiteral("transcriptions_completed"), m_transcriptionsCompleted);
     object.insert(QStringLiteral("transcriber_backend"),
                   m_transcriptionWorker != nullptr ? m_transcriptionWorker->backendName() : QStringLiteral("unconfigured"));
+    const BackendCapabilities capabilities =
+        m_transcriptionWorker != nullptr ? m_transcriptionWorker->capabilities() : m_transcriptionEngine->capabilities();
+    object.insert(QStringLiteral("transcriber_runtime"), capabilities.runtimeDescription);
+    object.insert(QStringLiteral("transcriber_supports_translation"), capabilities.supportsTranslation);
+    object.insert(QStringLiteral("transcriber_supports_auto_language"), capabilities.supportsAutoLanguage);
     return object;
 }
 
@@ -133,15 +146,18 @@ void MutterkeyService::onTranscriptionReady(const QString &text)
     }
 }
 
-void MutterkeyService::onTranscriptionFailed(const QString &errorMessage)
+void MutterkeyService::onTranscriptionFailed(const RuntimeError &error)
 {
-    qCWarning(serviceLog) << "Transcription failed:" << errorMessage;
+    qCWarning(serviceLog) << "Transcription failed:" << error.message;
 }
 
 void MutterkeyService::transcribeInBackground(Recording recording)
 {
     if (m_transcriptionWorker == nullptr) {
-        emit transcriptionFailed(QStringLiteral("Transcription worker is not running"));
+        emit transcriptionFailed(RuntimeError{
+            .code = RuntimeErrorCode::InternalRuntimeError,
+            .message = QStringLiteral("Transcription worker is not running"),
+        });
         return;
     }
 
@@ -163,7 +179,7 @@ bool MutterkeyService::startTranscriptionWorker(QString *errorMessage)
 
     // The worker owns the transcriber backend but lives on a dedicated thread so hotkey
     // and recorder callbacks do not block on model initialization or inference.
-    m_transcriptionWorker = new TranscriptionWorker(m_config.transcriber);
+    m_transcriptionWorker = new TranscriptionWorker(m_transcriptionEngine);
     m_transcriptionWorker->moveToThread(&m_transcriptionThread);
 
     connect(&m_transcriptionThread, &QThread::finished, m_transcriptionWorker, &QObject::deleteLater);
@@ -174,7 +190,7 @@ bool MutterkeyService::startTranscriptionWorker(QString *errorMessage)
 
     if (m_config.transcriber.warmupOnStart) {
         bool warmupOk = false;
-        QString warmupError;
+        RuntimeError warmupError;
         // Warmup has to run on the worker thread because that thread also owns the
         // transcriber object for the remainder of the process lifetime.
         QMetaObject::invokeMethod(m_transcriptionWorker,
@@ -184,7 +200,7 @@ bool MutterkeyService::startTranscriptionWorker(QString *errorMessage)
                                   Qt::BlockingQueuedConnection);
         if (!warmupOk) {
             if (errorMessage != nullptr) {
-                *errorMessage = warmupError;
+                *errorMessage = warmupError.message;
             }
             stopTranscriptionWorker();
             return false;

@@ -33,9 +33,9 @@ This repository is intentionally kept minimal:
 - `src/clipboardwriter.*`: clipboard integration, preferring KDE system clipboard support
 - `src/audio/recordingnormalizer.*`: conversion to Whisper-ready mono `float32` at `16 kHz`
 - `src/transcription/whispercpptranscriber.*`: in-process Whisper integration
-- `src/transcription/transcriptionengine.*`: app-owned engine/session seam for backend selection and future runtime evolution
+- `src/transcription/transcriptionengine.*`: app-owned engine/session seam for backend selection and future runtime evolution; the engine owns immutable runtime metadata such as backend capabilities
 - `src/transcription/transcriptionworker.*`: worker object hosted on a dedicated `QThread`
-- `src/transcription/transcriptiontypes.h`: normalized audio and transcription result value types
+- `src/transcription/transcriptiontypes.h`: normalized audio, typed runtime error, and capability value types
 - `src/config.*`: JSON config loading and defaults
 - `src/app/*`: shared CLI/runtime command helpers used by the main entrypoint
 - `src/control/*`: local daemon control transport, typed snapshots, and session/client APIs
@@ -120,6 +120,7 @@ Notes:
 - Use `bash scripts/check-release-hygiene.sh` when touching publication-facing files such as `README.md`, licenses, `contrib/`, CI, or helper scripts
 - Use `cmake --build "$BUILD_DIR" --target docs` when touching repo-owned public headers, Doxygen config, the Doxygen main page, or CI/docs wiring
 - If install rules or licensing files change, confirm the temporary install contains the expected files under `share/licenses/mutterkey`
+- If you add or change public methods in repo-owned headers, expect `cmake --build "$BUILD_DIR" --target docs` to fail until the new API is documented; treat that as part of the normal implementation loop, not follow-up polish
 
 ## Tooling Best Practices
 
@@ -136,6 +137,7 @@ Notes:
 - Reconfigure the build directory after installing new tools so cached `find_program()` results are refreshed
 - When validating inside a restricted sandbox, be ready to disable `ccache` with `CCACHE_DISABLE=1` if the cache location is read-only; that is an execution-environment issue, not a Mutterkey build failure
 - Prefer fixing the code over weakening `.clang-tidy` or the Clazy check set; only relax tool config when the warning is clearly low-value for this repo
+- If `clang-tidy` flags a new small enum for `performance-enum-size`, prefer an explicit narrow underlying type such as `std::uint8_t` instead of suppressing the warning
 - In this Qt-heavy repo, treat `misc-include-cleaner` and `readability-redundant-access-specifiers` as low-value `clang-tidy` noise unless the underlying tool behavior improves; they conflict with Qt header-provider reality and `signals` / `slots` / `Q_SLOTS` sectioning more than they improve safety
 - Prefer anonymous-namespace `Q_LOGGING_CATEGORY` for file-local logging categories; `Q_STATIC_LOGGING_CATEGORY` is not portable enough across the Qt versions this repo may build against
 - Do not add broad Valgrind suppressions by default; only add narrow suppressions after reproducing stable third-party noise and keep them clearly scoped
@@ -156,8 +158,9 @@ Notes:
 - Prefer narrow shared value types across subsystems; for example, consumers that only need captured audio should include `src/audio/recording.h`, not the full recorder class
 - Keep JSON and other transport details at subsystem boundaries; prefer typed C++ snapshots/results once data crosses into app-owned control, tray, or service code
 - Prefer dependency injection for tray-shell and control-surface code from the first implementation so headless Qt tests stay simple
-- When preparing the transcription path for future runtime work, prefer app-owned engine/session seams and injected sessions over leaking concrete backend types into CLI, service, or worker orchestration
+- When preparing the transcription path for future runtime work, prefer app-owned engine/session seams and injected sessions over leaking concrete backend types into CLI, service, or worker orchestration. Keep immutable capability reporting and backend metadata on the engine side, and keep the session side focused on mutable decode state, warmup, and transcription
 - Prefer product-owned runtime interfaces, model/session separation, and deterministic backend selection before adding new inference backends or widening cross-platform support
+- Keep backend-specific validation out of `src/config.*` when practical. Product config parsing should normalize and preserve user input, while backend support checks should live in the app-owned runtime layer near `src/transcription/*`
 - Preserve the current product direction: embedded `whisper.cpp`, KDE-first, CLI/service-first
 
 ## C++ Core Guidelines Priorities
@@ -233,7 +236,7 @@ Typical model location:
 - Treat `mutterkey-tray` as a shipped artifact once it is installed or validated in CI; keep install rules, README/setup notes, release checklist items, and workflow checks aligned with that status
 - Verify with a fresh CMake build when the change affects compilation or linkage
 - Run `ctest` when touching covered code in `src/config.*` or `src/audio/recordingnormalizer.*`, and extend the deterministic headless tests when practical
-- When touching transcription orchestration or backend seams, prefer small headless tests with fake/injected sessions over model-dependent integration tests
+- When touching transcription orchestration or backend seams, prefer small headless tests with fake/injected sessions or fake engines over model-dependent integration tests. Engine injection is the preferred seam for orchestration tests; direct session injection is still useful for narrow worker behavior
 - When adding or fixing Qt GUI tests, make the `CTest` registration itself headless with `QT_QPA_PLATFORM=offscreen` so CI does not try to load `xcb`
 - Prefer expanding tests around pure parsing, value normalization, and other environment-independent logic before adding KDE-session or device-heavy coverage
 - Use `-DMUTTERKEY_ENABLE_ASAN=ON` and `-DMUTTERKEY_ENABLE_UBSAN=ON` for fast iteration on memory and UB bugs, and use the repo-owned Valgrind lane as the slower release-focused confirmation step
@@ -243,7 +246,7 @@ Typical model location:
 - Prefer the `lint` target for a full pre-handoff analyzer pass, and use the individual analyzer targets when iterating on one class of warnings
 - Run `bash scripts/run-valgrind.sh "$BUILD_DIR"` before handoff when the task is specifically about memory, ownership, lifetime, shutdown, or release hardening
 - Run `bash scripts/check-release-hygiene.sh` before handoff when the task touches publication-facing files or repository metadata
-- If `QT_QPA_PLATFORM=offscreen "$BUILD_DIR/mutterkey" diagnose 1` fails in a headless environment without useful output, note that limitation explicitly rather than assuming a docs-only or packaging-only change regressed runtime behavior
+- If `QT_QPA_PLATFORM=offscreen "$BUILD_DIR/mutterkey" diagnose 1` fails in a headless environment after model loading or during KDE/session-dependent startup, note that limitation explicitly rather than assuming the runtime seam or docs-only change regressed behavior
 - Do not leave generated artifacts in the repository tree at the end of the task
 - Do not assume every workspace copy is an initialized git repository; if `git` commands fail, continue with file-based validation and mention the limitation in the final response
 

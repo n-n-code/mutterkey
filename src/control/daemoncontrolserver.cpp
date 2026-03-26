@@ -11,10 +11,21 @@ DaemonControlServer::DaemonControlServer(QString configPath,
                                          AppConfig config,
                                          const MutterkeyService *service,
                                          QObject *parent)
+    : DaemonControlServer(
+          std::move(configPath), std::move(config), service, daemonControlSocketName(), parent)
+{
+}
+
+DaemonControlServer::DaemonControlServer(QString configPath,
+                                         AppConfig config,
+                                         const MutterkeyService *service,
+                                         QString socketName,
+                                         QObject *parent)
     : QObject(parent)
     , m_configPath(std::move(configPath))
     , m_config(std::move(config))
     , m_service(service)
+    , m_socketName(std::move(socketName))
     , m_server(new QLocalServer(this))
 {
     connect(m_server, &QLocalServer::newConnection, this, &DaemonControlServer::onNewConnection);
@@ -27,8 +38,8 @@ DaemonControlServer::~DaemonControlServer()
 
 bool DaemonControlServer::start(QString *errorMessage)
 {
-    QLocalServer::removeServer(daemonControlSocketName());
-    if (m_server->listen(daemonControlSocketName())) {
+    QLocalServer::removeServer(m_socketName);
+    if (m_server->listen(m_socketName)) {
         return true;
     }
 
@@ -42,7 +53,7 @@ void DaemonControlServer::stop()
 {
     if (m_server->isListening()) {
         m_server->close();
-        QLocalServer::removeServer(daemonControlSocketName());
+        QLocalServer::removeServer(m_socketName);
     }
 }
 
@@ -87,7 +98,7 @@ QByteArray DaemonControlServer::handleRequest(const QByteArray &payload) const
     switch (request.method) {
     case DaemonControlMethod::Ping:
         response.result.insert(QStringLiteral("application"), QCoreApplication::applicationName());
-        response.result.insert(QStringLiteral("socket_name"), daemonControlSocketName());
+        response.result.insert(QStringLiteral("socket_name"), m_socketName);
         break;
     case DaemonControlMethod::GetStatus:
         response.result = daemonStatusSnapshotToJsonObject(buildStatusSnapshot());

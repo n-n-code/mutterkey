@@ -26,6 +26,22 @@ bash scripts/check-release-hygiene.sh
 
 ## Build And Test
 
+- For the automated pre-install portion of this section, you can run:
+
+```bash
+bash scripts/run-release-checklist.sh
+```
+
+- Pass extra CMake configure arguments after `--` when you want to exercise an
+  accelerated release build. For example:
+
+```bash
+bash scripts/run-release-checklist.sh -- -DMUTTERKEY_ENABLE_WHISPER_CUDA=ON
+```
+
+- The script intentionally stops before install validation and still prints the
+  remaining manual review items that need human judgment.
+
 - Configure a fresh out-of-tree build:
 
 ```bash

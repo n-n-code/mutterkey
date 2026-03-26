@@ -59,6 +59,35 @@ QString describeRegisteredBackends()
         .arg(backendNames.join(QStringLiteral(", ")), deviceDescriptions.join(QStringLiteral(" | ")));
 }
 
+RuntimeError makeRuntimeError(RuntimeErrorCode code, QString message, QString detail = {})
+{
+    return RuntimeError{.code = code, .message = std::move(message), .detail = std::move(detail)};
+}
+
+RuntimeError makeUnsupportedLanguageError(const QString &language)
+{
+    return makeRuntimeError(RuntimeErrorCode::UnsupportedLanguage,
+                            QStringLiteral("Embedded Whisper does not support language: %1").arg(language),
+                            QStringLiteral("Requested language code: %1").arg(language));
+}
+
+bool isSupportedLanguageCode(const QString &language)
+{
+    const QString normalizedLanguage = language.trimmed().toLower();
+    if (normalizedLanguage.isEmpty() || normalizedLanguage == QStringLiteral("auto")) {
+        return true;
+    }
+
+    for (int languageId = 0; languageId <= whisper_lang_max_id(); ++languageId) {
+        const char *languageCode = whisper_lang_str(languageId);
+        if (languageCode != nullptr && normalizedLanguage == QString::fromUtf8(languageCode)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 } // namespace
 
 WhisperCppTranscriber::WhisperCppTranscriber(TranscriberConfig config)
@@ -81,26 +110,54 @@ QString WhisperCppTranscriber::backendNameStatic()
     return QStringLiteral("whisper.cpp");
 }
 
+BackendCapabilities WhisperCppTranscriber::capabilitiesStatic()
+{
+    BackendCapabilities capabilities;
+    capabilities.backendName = backendNameStatic();
+    capabilities.runtimeDescription = describeRegisteredBackends();
+    capabilities.supportsAutoLanguage = true;
+    capabilities.supportsTranslation = true;
+    capabilities.supportsWarmup = true;
+    capabilities.supportedLanguages.reserve(whisper_lang_max_id() + 1);
+    for (int languageId = 0; languageId <= whisper_lang_max_id(); ++languageId) {
+        const char *languageCode = whisper_lang_str(languageId);
+        if (languageCode != nullptr) {
+            capabilities.supportedLanguages.append(QString::fromUtf8(languageCode));
+        }
+    }
+    return capabilities;
+}
+
 QString WhisperCppTranscriber::backendName() const
 {
     return backendNameStatic();
 }
 
-bool WhisperCppTranscriber::warmup(QString *errorMessage)
+bool WhisperCppTranscriber::warmup(RuntimeError *error)
 {
-    return ensureInitialized(errorMessage);
+    return ensureInitialized(error);
 }
 
 TranscriptionResult WhisperCppTranscriber::transcribe(const Recording &recording)
 {
-    QString errorMessage;
-    if (!ensureInitialized(&errorMessage)) {
-        return TranscriptionResult{.success = false, .text = {}, .error = errorMessage};
+    const QString requestedLanguage = m_config.language.trimmed().toLower();
+    if (!isSupportedLanguageCode(requestedLanguage)) {
+        return TranscriptionResult{.success = false, .text = {}, .error = makeUnsupportedLanguageError(requestedLanguage)};
     }
 
+    RuntimeError runtimeError;
+    if (!ensureInitialized(&runtimeError)) {
+        return TranscriptionResult{.success = false, .text = {}, .error = runtimeError};
+    }
+
+    QString errorMessage;
     NormalizedAudio normalizedAudio;
     if (!m_normalizer.normalizeForWhisper(recording, &normalizedAudio, &errorMessage)) {
-        return TranscriptionResult{.success = false, .text = {}, .error = errorMessage};
+        return TranscriptionResult{
+            .success = false,
+            .text = {},
+            .error = makeRuntimeError(RuntimeErrorCode::AudioNormalizationFailed, errorMessage),
+        };
     }
 
     qCInfo(whisperCppLog) << "Normalized recording to"
@@ -134,7 +191,8 @@ TranscriptionResult WhisperCppTranscriber::transcribe(const Recording &recording
         return TranscriptionResult{
             .success = false,
             .text = {},
-            .error = QStringLiteral("Embedded Whisper transcription failed with code %1").arg(result),
+            .error = makeRuntimeError(RuntimeErrorCode::DecodeFailed,
+                                      QStringLiteral("Embedded Whisper transcription failed with code %1").arg(result)),
         };
     }
 
@@ -159,7 +217,7 @@ TranscriptionResult WhisperCppTranscriber::transcribe(const Recording &recording
     return TranscriptionResult{.success = true, .text = transcript.trimmed(), .error = {}};
 }
 
-bool WhisperCppTranscriber::ensureInitialized(QString *errorMessage)
+bool WhisperCppTranscriber::ensureInitialized(RuntimeError *error)
 {
     if (m_context != nullptr) {
         return true;
@@ -169,8 +227,10 @@ bool WhisperCppTranscriber::ensureInitialized(QString *errorMessage)
     // the exact model file whisper.cpp is attempting to load.
     const QString modelPath = QFileInfo(m_config.modelPath).absoluteFilePath();
     if (modelPath.isEmpty() || !QFileInfo::exists(modelPath)) {
-        if (errorMessage != nullptr) {
-            *errorMessage = QStringLiteral("Embedded Whisper model not found: %1").arg(m_config.modelPath);
+        if (error != nullptr) {
+            *error = makeRuntimeError(RuntimeErrorCode::ModelNotFound,
+                                      QStringLiteral("Embedded Whisper model not found: %1").arg(m_config.modelPath),
+                                      modelPath);
         }
         return false;
     }
@@ -179,8 +239,9 @@ bool WhisperCppTranscriber::ensureInitialized(QString *errorMessage)
     qCInfo(whisperCppLog).noquote() << "ggml runtime:" << describeRegisteredBackends();
     m_context.reset(whisper_init_from_file_with_params(modelPath.toUtf8().constData(), contextParams));
     if (m_context == nullptr) {
-        if (errorMessage != nullptr) {
-            *errorMessage = QStringLiteral("Failed to load embedded Whisper model: %1").arg(modelPath);
+        if (error != nullptr) {
+            *error = makeRuntimeError(RuntimeErrorCode::ModelLoadFailed,
+                                      QStringLiteral("Failed to load embedded Whisper model: %1").arg(modelPath));
         }
         return false;
     }

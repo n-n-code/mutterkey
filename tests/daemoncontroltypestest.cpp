@@ -18,6 +18,11 @@ private slots:
 
 void DaemonControlTypesTest::parseStatusSnapshot()
 {
+    // WHAT: Verify that a daemon status snapshot can be converted to JSON and back.
+    // HOW: Build a populated status snapshot, serialize it to a JSON object, parse it
+    // again, and compare the key fields with the original values.
+    // WHY: Status snapshots are shown to operators and tray UI code, so stable typed
+    // parsing is necessary for trustworthy status reporting.
     DaemonStatusSnapshot input;
     input.daemonRunning = true;
     input.configPath = QStringLiteral("/tmp/mutterkey.json");
@@ -34,6 +39,11 @@ void DaemonControlTypesTest::parseStatusSnapshot()
 
 void DaemonControlTypesTest::parseConfigSnapshot()
 {
+    // WHAT: Verify that a daemon config snapshot can be converted to JSON and back.
+    // HOW: Build a config snapshot with representative values, serialize it, parse it,
+    // and check that the parsed snapshot still contains the same configuration data.
+    // WHY: This protects the contract used to inspect daemon configuration remotely, which
+    // helps operators and UI surfaces present accurate settings.
     DaemonConfigSnapshot input;
     input.configPath = QStringLiteral("/tmp/mutterkey.json");
     input.configExists = true;
@@ -50,6 +60,11 @@ void DaemonControlTypesTest::parseConfigSnapshot()
 
 void DaemonControlTypesTest::rejectMalformedStatusSnapshot()
 {
+    // WHAT: Verify that malformed status payloads are rejected.
+    // HOW: Attempt to parse a JSON object that is missing required status fields and check
+    // that parsing fails with a malformed-payload error.
+    // WHY: Rejecting incomplete status data prevents the rest of the application from
+    // treating broken control-plane messages as trustworthy state.
     DaemonStatusSnapshot parsed;
     QString errorMessage;
     QVERIFY(!parseDaemonStatusSnapshot(QJsonObject{{QStringLiteral("config_path"), QStringLiteral("/tmp/x")}}, &parsed, &errorMessage));

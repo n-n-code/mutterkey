@@ -22,6 +22,11 @@ private slots:
 
 void CommandDispatchTest::commandIndexSkipsGlobalOptionValues()
 {
+    // WHAT: Verify that command discovery finds the real subcommand position.
+    // HOW: Pass arguments that include global options and their values before the command,
+    // then check that the returned index points at "config" instead of one of the option values.
+    // WHY: Command routing depends on this index being correct, and a wrong index would make
+    // valid CLI input behave like an unknown or malformed command.
     const QStringList arguments{
         QStringLiteral("mutterkey"),
         QStringLiteral("--config"),
@@ -36,6 +41,11 @@ void CommandDispatchTest::commandIndexSkipsGlobalOptionValues()
 
 void CommandDispatchTest::bareConfigShowsDedicatedHelp()
 {
+    // WHAT: Verify that the bare "config" command opens config-specific help.
+    // HOW: Build an argument list with only the top-level "config" command and assert that
+    // the helper decides to show the dedicated config help text.
+    // WHY: Users often start by typing a command name on its own, so this keeps the first
+    // help experience clear instead of falling through to generic CLI behavior.
     const QStringList arguments{
         QStringLiteral("mutterkey"),
         QStringLiteral("config"),
@@ -47,6 +57,11 @@ void CommandDispatchTest::bareConfigShowsDedicatedHelp()
 
 void CommandDispatchTest::configHelpFlagShowsDedicatedHelp()
 {
+    // WHAT: Verify that "--help" after the "config" command still selects config help.
+    // HOW: Include a global option before "config", add "--help" after it, and confirm
+    // the help-selection logic chooses the config-specific help path.
+    // WHY: This protects a common support path where users ask the CLI for targeted help
+    // while still using global overrides such as a custom config file.
     const QStringList arguments{
         QStringLiteral("mutterkey"),
         QStringLiteral("--config"),
@@ -61,6 +76,11 @@ void CommandDispatchTest::configHelpFlagShowsDedicatedHelp()
 
 void CommandDispatchTest::nonConfigCommandsDoNotShowConfigHelp()
 {
+    // WHAT: Verify that non-config commands do not accidentally trigger config help.
+    // HOW: Use a normal "diagnose" invocation and assert that the helper reports that
+    // config help should not be shown.
+    // WHY: Help detection must stay narrow, otherwise unrelated commands would become
+    // confusing or unusable because they would be redirected to the wrong documentation.
     const QStringList arguments{
         QStringLiteral("mutterkey"),
         QStringLiteral("diagnose"),
@@ -73,6 +93,11 @@ void CommandDispatchTest::nonConfigCommandsDoNotShowConfigHelp()
 
 void CommandDispatchTest::configHelpTextMentionsSubcommands()
 {
+    // WHAT: Verify that the config help text mentions the main config workflows.
+    // HOW: Read the generated help text and check that it includes the expected command
+    // shapes and examples such as "init", "set", and key option hints.
+    // WHY: This test protects the CLI's self-documentation, which is especially important
+    // when users rely on the help text instead of external documentation.
     const QString helpText = configHelpText();
 
     QVERIFY(helpText.contains(QStringLiteral("config <subcommand>")));
@@ -84,6 +109,11 @@ void CommandDispatchTest::configHelpTextMentionsSubcommands()
 
 void CommandDispatchTest::configHelpTextListsAllSupportedConfigKeys()
 {
+    // WHAT: Verify that every supported config key is listed in the help text.
+    // HOW: Iterate through the canonical supported-key list and assert that each key
+    // appears in the rendered help output.
+    // WHY: The help text should stay aligned with the implementation so users can discover
+    // every editable setting without guessing or reading the source code.
     const QString helpText = configHelpText();
 
     for (const QString &key : supportedConfigKeys()) {

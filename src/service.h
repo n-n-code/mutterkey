@@ -33,10 +33,14 @@ public:
     /**
      * @brief Creates the service with a fixed runtime configuration.
      * @param config Startup configuration snapshot copied into the service.
+     * @param transcriptionEngine Shared immutable engine used by the worker thread.
      * @param clipboard Non-owning pointer to the application clipboard.
      * @param parent Optional QObject parent.
      */
-    explicit MutterkeyService(const AppConfig &config, QClipboard *clipboard, QObject *parent = nullptr);
+    explicit MutterkeyService(const AppConfig &config,
+                              std::shared_ptr<const TranscriptionEngine> transcriptionEngine,
+                              QClipboard *clipboard,
+                              QObject *parent = nullptr);
 
     /**
      * @brief Stops background work and joins the transcription thread.
@@ -79,9 +83,9 @@ signals:
 
     /**
      * @brief Emitted when recording or transcription fails.
-     * @param errorMessage Human-readable failure description.
+     * @param error Structured failure description.
      */
-    void transcriptionFailed(const QString &errorMessage);
+    void transcriptionFailed(const RuntimeError &error);
 
 private Q_SLOTS:
     /**
@@ -102,9 +106,9 @@ private Q_SLOTS:
 
     /**
      * @brief Handles transcription failures reported by the worker thread.
-     * @param errorMessage Human-readable failure description.
+     * @param error Structured failure description.
      */
-    void onTranscriptionFailed(const QString &errorMessage);
+    void onTranscriptionFailed(const RuntimeError &error);
 
 private:
     /**
@@ -129,6 +133,8 @@ private:
     AppConfig m_config;
     /// Main-thread recorder used while the push-to-talk shortcut is held.
     AudioRecorder m_audioRecorder;
+    /// Shared immutable runtime provider used to construct worker-thread sessions.
+    std::shared_ptr<const TranscriptionEngine> m_transcriptionEngine;
     /// Clipboard delivery helper for successful transcription results.
     ClipboardWriter m_clipboardWriter;
     /// KDE global shortcut registration and diagnostics helper.

@@ -35,10 +35,10 @@ public:
 
     /**
      * @brief Performs optional backend warmup for this session.
-     * @param errorMessage Optional destination for a human-readable failure reason.
+     * @param error Optional destination for a structured failure reason.
      * @return `true` if the session is ready for transcription, otherwise `false`.
      */
-    virtual bool warmup(QString *errorMessage = nullptr) = 0;
+    virtual bool warmup(RuntimeError *error = nullptr) = 0;
 
     /**
      * @brief Transcribes a single captured recording.
@@ -67,10 +67,10 @@ public:
     TranscriptionEngine &operator=(TranscriptionEngine &&) = delete;
 
     /**
-     * @brief Returns the backend identifier for sessions created by this engine.
-     * @return Short backend name used for logs and diagnostics.
+     * @brief Returns the runtime capabilities for sessions created by this engine.
+     * @return App-owned capability snapshot suitable for diagnostics.
      */
-    [[nodiscard]] virtual QString backendName() const = 0;
+    [[nodiscard]] virtual BackendCapabilities capabilities() const = 0;
 
     /**
      * @brief Creates a new isolated transcription session.
@@ -87,4 +87,4 @@ protected:
  * @param config Backend configuration copied into the engine.
  * @return Engine suitable for creating isolated transcription sessions.
  */
-[[nodiscard]] std::unique_ptr<TranscriptionEngine> createTranscriptionEngine(const TranscriberConfig &config);
+[[nodiscard]] std::shared_ptr<const TranscriptionEngine> createTranscriptionEngine(const TranscriberConfig &config);
