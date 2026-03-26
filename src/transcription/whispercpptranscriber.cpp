@@ -76,9 +76,14 @@ void WhisperCppTranscriber::freeContext(whisper_context *context) noexcept
     }
 }
 
-QString WhisperCppTranscriber::backendName()
+QString WhisperCppTranscriber::backendNameStatic()
 {
     return QStringLiteral("whisper.cpp");
+}
+
+QString WhisperCppTranscriber::backendName() const
+{
+    return backendNameStatic();
 }
 
 bool WhisperCppTranscriber::warmup(QString *errorMessage)

@@ -33,6 +33,7 @@ This repository is intentionally kept minimal:
 - `src/clipboardwriter.*`: clipboard integration, preferring KDE system clipboard support
 - `src/audio/recordingnormalizer.*`: conversion to Whisper-ready mono `float32` at `16 kHz`
 - `src/transcription/whispercpptranscriber.*`: in-process Whisper integration
+- `src/transcription/transcriptionengine.*`: app-owned engine/session seam for backend selection and future runtime evolution
 - `src/transcription/transcriptionworker.*`: worker object hosted on a dedicated `QThread`
 - `src/transcription/transcriptiontypes.h`: normalized audio and transcription result value types
 - `src/config.*`: JSON config loading and defaults
@@ -136,6 +137,7 @@ Notes:
 - When validating inside a restricted sandbox, be ready to disable `ccache` with `CCACHE_DISABLE=1` if the cache location is read-only; that is an execution-environment issue, not a Mutterkey build failure
 - Prefer fixing the code over weakening `.clang-tidy` or the Clazy check set; only relax tool config when the warning is clearly low-value for this repo
 - In this Qt-heavy repo, treat `misc-include-cleaner` and `readability-redundant-access-specifiers` as low-value `clang-tidy` noise unless the underlying tool behavior improves; they conflict with Qt header-provider reality and `signals` / `slots` / `Q_SLOTS` sectioning more than they improve safety
+- Prefer anonymous-namespace `Q_LOGGING_CATEGORY` for file-local logging categories; `Q_STATIC_LOGGING_CATEGORY` is not portable enough across the Qt versions this repo may build against
 - Do not add broad Valgrind suppressions by default; only add narrow suppressions after reproducing stable third-party noise and keep them clearly scoped
 - When adding tests, prefer small `Qt Test` cases that run headlessly under `CTest` and avoid microphone, clipboard, or KDE session dependencies unless the task is specifically integration-focused
 - For tool-driven cleanups, preserve the existing design and behavior; do not perform broad rewrites just to satisfy style-oriented recommendations
@@ -146,7 +148,7 @@ Notes:
 - Stay within the existing style and structure; do not reformat unrelated code
 - Prefer small, direct classes over adding abstraction layers without a concrete need
 - Keep Qt usage idiomatic: `QObject` ownership, signal/slot wiring, and `QThread` boundaries should remain explicit
-- Prefer `Q_STATIC_LOGGING_CATEGORY` for translation-unit-local logging categories instead of global `Q_LOGGING_CATEGORY` declarations when no cross-file declaration is needed
+- Prefer anonymous-namespace `Q_LOGGING_CATEGORY` for translation-unit-local logging categories when no cross-file declaration is needed; keep the pattern compatible with older Qt builds used in CI
 - When refactoring Qt class declarations, remember that `moc` still cares about section structure: keep explicit `signals`, `slots`, `Q_SLOTS`, and access sections valid for Qt even if a generic style check suggests flattening them
 - Prefer explicit validation and safe fallback behavior for config-driven runtime values
 - Avoid introducing optional backends, plugin systems, or cross-platform abstractions unless the task requires them
@@ -154,6 +156,8 @@ Notes:
 - Prefer narrow shared value types across subsystems; for example, consumers that only need captured audio should include `src/audio/recording.h`, not the full recorder class
 - Keep JSON and other transport details at subsystem boundaries; prefer typed C++ snapshots/results once data crosses into app-owned control, tray, or service code
 - Prefer dependency injection for tray-shell and control-surface code from the first implementation so headless Qt tests stay simple
+- When preparing the transcription path for future runtime work, prefer app-owned engine/session seams and injected sessions over leaking concrete backend types into CLI, service, or worker orchestration
+- Prefer product-owned runtime interfaces, model/session separation, and deterministic backend selection before adding new inference backends or widening cross-platform support
 - Preserve the current product direction: embedded `whisper.cpp`, KDE-first, CLI/service-first
 
 ## C++ Core Guidelines Priorities
@@ -225,9 +229,11 @@ Typical model location:
 - Update `LICENSE`, `THIRD_PARTY_NOTICES.md`, CMake install rules, and `third_party/whisper.cpp.UPSTREAM.md` when packaging, licensing, or vendored dependency behavior changes
 - Keep `README.md`, `AGENTS.md`, and any relevant local skills aligned with the current `scripts/update-whisper.sh` workflow when the vendor-update process changes
 - Store upcoming feature plans in `next_feature/` as Markdown files, and update the existing plan there when refining the same upcoming feature instead of scattering notes across the repo
+- Keep architecture-evolution plans grounded in incremental slices that preserve the current shipped `whisper.cpp` path while moving ownership of interfaces, tests, and packaging toward repo-owned code
 - Treat `mutterkey-tray` as a shipped artifact once it is installed or validated in CI; keep install rules, README/setup notes, release checklist items, and workflow checks aligned with that status
 - Verify with a fresh CMake build when the change affects compilation or linkage
 - Run `ctest` when touching covered code in `src/config.*` or `src/audio/recordingnormalizer.*`, and extend the deterministic headless tests when practical
+- When touching transcription orchestration or backend seams, prefer small headless tests with fake/injected sessions over model-dependent integration tests
 - When adding or fixing Qt GUI tests, make the `CTest` registration itself headless with `QT_QPA_PLATFORM=offscreen` so CI does not try to load `xcb`
 - Prefer expanding tests around pure parsing, value normalization, and other environment-independent logic before adding KDE-session or device-heavy coverage
 - Use `-DMUTTERKEY_ENABLE_ASAN=ON` and `-DMUTTERKEY_ENABLE_UBSAN=ON` for fast iteration on memory and UB bugs, and use the repo-owned Valgrind lane as the slower release-focused confirmation step

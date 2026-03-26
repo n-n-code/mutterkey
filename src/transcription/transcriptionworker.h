@@ -2,9 +2,10 @@
 
 #include "audio/recording.h"
 #include "config.h"
-#include "transcription/whispercpptranscriber.h"
+#include "transcription/transcriptionengine.h"
 
 #include <QObject>
+#include <memory>
 
 /**
  * @file
@@ -28,7 +29,13 @@ public:
      * @param config Transcriber settings copied into the owned backend.
      * @param parent Optional QObject parent.
      */
-    explicit TranscriptionWorker(TranscriberConfig config, QObject *parent = nullptr);
+    explicit TranscriptionWorker(const TranscriberConfig &config, QObject *parent = nullptr);
+    /**
+     * @brief Creates a worker around an already-constructed session.
+     * @param transcriber Owned session implementation.
+     * @param parent Optional QObject parent.
+     */
+    explicit TranscriptionWorker(std::unique_ptr<TranscriptionSession> transcriber, QObject *parent = nullptr);
     ~TranscriptionWorker() override = default;
 
     Q_DISABLE_COPY_MOVE(TranscriptionWorker)
@@ -67,5 +74,5 @@ signals:
 
 private:
     /// Owned transcription backend implementation.
-    WhisperCppTranscriber m_transcriber;
+    std::unique_ptr<TranscriptionSession> m_transcriber;
 };

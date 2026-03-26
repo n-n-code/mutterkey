@@ -43,6 +43,8 @@ set(MUTTERKEY_CORE_SOURCES
     src/service.cpp
     src/service.h
     src/transcription/transcriptiontypes.h
+    src/transcription/transcriptionengine.cpp
+    src/transcription/transcriptionengine.h
     src/transcription/transcriptionworker.cpp
     src/transcription/transcriptionworker.h
     src/transcription/whispercpptranscriber.cpp

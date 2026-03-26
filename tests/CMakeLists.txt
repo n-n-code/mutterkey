@@ -35,6 +35,14 @@ mutterkey_add_qt_test(daemoncontroltypestest
     ../src/control/daemoncontroltypes.cpp
 )
 
+mutterkey_add_qt_test(transcriptionworkertest
+    transcriptionworkertest.cpp
+    ../src/audio/recordingnormalizer.cpp
+    ../src/transcription/transcriptionengine.cpp
+    ../src/transcription/transcriptionworker.cpp
+    ../src/transcription/whispercpptranscriber.cpp
+)
+
 mutterkey_add_qt_test(traystatuswindowtest
     traystatuswindowtest.cpp
     ../src/control/daemoncontrolclient.cpp
@@ -47,12 +55,13 @@ mutterkey_add_qt_test(traystatuswindowtest
 target_link_libraries(configtest PRIVATE whisper)
 target_link_libraries(commanddispatchtest PRIVATE whisper)
 target_link_libraries(daemoncontroltypestest PRIVATE whisper)
+target_link_libraries(transcriptionworkertest PRIVATE whisper)
 target_link_libraries(traystatuswindowtest PRIVATE whisper)
 
 if(TARGET clang-tidy)
-    add_dependencies(clang-tidy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen daemoncontrolprotocoltest_autogen daemoncontroltypestest_autogen traystatuswindowtest_autogen)
+    add_dependencies(clang-tidy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen daemoncontrolprotocoltest_autogen daemoncontroltypestest_autogen transcriptionworkertest_autogen traystatuswindowtest_autogen)
 endif()
 
 if(TARGET clazy)
-    add_dependencies(clazy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen daemoncontrolprotocoltest_autogen daemoncontroltypestest_autogen traystatuswindowtest_autogen)
+    add_dependencies(clazy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen daemoncontrolprotocoltest_autogen daemoncontroltypestest_autogen transcriptionworkertest_autogen traystatuswindowtest_autogen)
 endif()
