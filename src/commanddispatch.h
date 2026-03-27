@@ -30,3 +30,17 @@ bool shouldShowConfigHelp(const QStringList &arguments, int commandIndex);
  * @return Human-readable help text.
  */
 QString configHelpText();
+
+/**
+ * @brief Returns whether the model command should print dedicated help.
+ * @param arguments Raw command-line arguments.
+ * @param commandIndex Index returned by commandIndexFromArguments().
+ * @return `true` for bare `model` and `model --help` style invocations.
+ */
+bool shouldShowModelHelp(const QStringList &arguments, int commandIndex);
+
+/**
+ * @brief Returns the dedicated help text for model subcommands.
+ * @return Human-readable help text.
+ */
+QString modelHelpText();

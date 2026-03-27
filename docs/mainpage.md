@@ -21,12 +21,17 @@ Current runtime shape:
 
 - `TranscriptionEngine` is the immutable runtime/provider boundary
 - `TranscriptionSession` is the mutable per-session decode boundary
+- native Mutterkey model packages are now the canonical model artifact
 - internal audio flow is streaming-first through normalized chunks and
   transcript events
 - `BackendCapabilities` reports static backend support used for orchestration
 - `RuntimeDiagnostics` reports runtime/device/model inspection data separately
   from static capabilities
 - `RuntimeError` and `RuntimeErrorCode` provide typed runtime failures
+- `ModelCatalog`, `ModelPackage`, and `ModelValidator` own model inspection,
+  compatibility checks, and integrity validation before backend load
+- raw Whisper `.bin` files are handled only through an explicit compatibility
+  path and import flow
 - `TranscriptionWorker` hosts transcription on a dedicated `QThread` and
   creates live sessions lazily on that worker thread
 - the shipped daemon and `once` flows still use a compatibility wrapper that
@@ -42,6 +47,10 @@ Core API surface covered here:
   samples at `16 kHz`.
 - `AudioChunker` splits normalized audio into deterministic stream chunks.
 - `TranscriptAssembler` builds final transcript text from streaming events.
+- `ModelCatalog` resolves package directories, `model.json`, and legacy raw
+  artifacts into validated product-owned model metadata.
+- `RawWhisperImporter` converts raw whisper.cpp-compatible `ggml` `.bin` files
+  into native Mutterkey packages.
 - `TranscriptionEngine` and `TranscriptionSession` define the app-owned runtime
   seam.
 - `WhisperCppTranscriber` performs in-process transcription through vendored

@@ -18,6 +18,8 @@ private slots:
     void nonConfigCommandsDoNotShowConfigHelp();
     void configHelpTextMentionsSubcommands();
     void configHelpTextListsAllSupportedConfigKeys();
+    void bareModelShowsDedicatedHelp();
+    void modelHelpTextMentionsSubcommands();
 };
 
 } // namespace
@@ -158,6 +160,35 @@ void CommandDispatchTest::configHelpTextListsAllSupportedConfigKeys()
     for (const QString &key : supportedConfigKeys()) {
         QVERIFY2(helpText.contains(key), qPrintable(QStringLiteral("Missing help entry for %1").arg(key)));
     }
+}
+
+void CommandDispatchTest::bareModelShowsDedicatedHelp()
+{
+    // WHAT: Verify that the bare "model" command opens model-specific help.
+    // HOW: Build an argument list with only the top-level "model" command and assert that
+    // the helper decides to show the dedicated model help text.
+    // WHY: The new Phase 4 model tooling should be discoverable directly from the CLI without
+    // requiring users to guess the subcommand shape or read the README first.
+    const QStringList arguments{
+        QStringLiteral("mutterkey"),
+        QStringLiteral("model"),
+    };
+
+    const int commandIndex = commandIndexFromArguments(arguments);
+    QVERIFY(shouldShowModelHelp(arguments, commandIndex));
+}
+
+void CommandDispatchTest::modelHelpTextMentionsSubcommands()
+{
+    // WHAT: Verify that the model help text mentions the import and inspect workflows.
+    // HOW: Render the generated model help text and assert that it contains both subcommands.
+    // WHY: The new native-package tooling needs clear self-documentation because it is now the
+    // canonical way to migrate and inspect model artifacts.
+    const QString helpText = modelHelpText();
+
+    QVERIFY(helpText.contains(QStringLiteral("model <subcommand>")));
+    QVERIFY(helpText.contains(QStringLiteral("import <raw-whisper-bin>")));
+    QVERIFY(helpText.contains(QStringLiteral("inspect <path>")));
 }
 
 QTEST_APPLESS_MAIN(CommandDispatchTest)

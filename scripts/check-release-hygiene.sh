@@ -52,6 +52,26 @@ collect_repo_files() {
         -type f -print
 }
 
+collect_tracked_binary_artifacts() {
+    if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        git ls-files \
+            | grep -E '(^|/).+\.(bin|gguf)$' \
+            | grep -Ev '^third_party/whisper\.cpp/' || true
+        return
+    fi
+
+    find . \
+        -path './.git' -prune -o \
+        -path './third_party/whisper.cpp' -prune -o \
+        -path './build' -prune -o \
+        -name 'build-*' -prune -o \
+        -name 'cmake-build-*' -prune -o \
+        -name 'CMakeFiles' -prune -o \
+        -name '*_autogen' -prune -o \
+        \( -type f -name '*.bin' -o -type f -name '*.gguf' \) -print \
+        | sed 's#^\./##' || true
+}
+
 mapfile -t repo_files < <(collect_repo_files)
 home_path_matches=""
 if ((${#repo_files[@]} > 0)); then
@@ -89,6 +109,9 @@ generated_artifact_matches="$(
         | sort || true
 )"
 print_violation "repository must not contain generated build artifacts" "$generated_artifact_matches"
+
+tracked_binary_artifact_matches="$(collect_tracked_binary_artifacts)"
+print_violation "repository must not track model or binary artifacts such as .bin or .gguf files" "$tracked_binary_artifact_matches"
 
 commentary_check_output="$(bash "$repo_root/scripts/check-test-commentary.sh" "$repo_root" 2>&1 || true)"
 print_violation "test sources must keep WHAT/HOW/WHY commentary blocks" "$commentary_check_output"

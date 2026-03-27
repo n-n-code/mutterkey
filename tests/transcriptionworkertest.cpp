@@ -73,6 +73,17 @@ public:
         return QStringLiteral("fake");
     }
 
+    [[nodiscard]] ModelMetadata metadata() const override
+    {
+        return ModelMetadata{
+            .packageId = QStringLiteral("fake-model"),
+            .displayName = QStringLiteral("Fake Model"),
+            .runtimeFamily = QStringLiteral("asr"),
+            .sourceFormat = QStringLiteral("fake"),
+            .modelFormat = QStringLiteral("fake"),
+        };
+    }
+
     [[nodiscard]] QString modelDescription() const override
     {
         return QStringLiteral("fake-model");

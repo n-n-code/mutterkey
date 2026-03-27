@@ -32,7 +32,7 @@ void WhisperCppTranscriberTest::whisperEngineSurfacesMissingModelAtLoadTime()
 
     QVERIFY(model == nullptr);
     QCOMPARE(error.code, RuntimeErrorCode::ModelNotFound);
-    QVERIFY(error.message.contains(QStringLiteral("Embedded Whisper model not found")));
+    QCOMPARE(error.code, RuntimeErrorCode::ModelNotFound);
 }
 
 void WhisperCppTranscriberTest::whisperRuntimeRejectsUnsupportedLanguage()

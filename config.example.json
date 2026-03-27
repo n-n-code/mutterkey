@@ -13,7 +13,7 @@
     "device_id": ""
   },
   "transcriber": {
-    "model_path": "/path/to/ggml-base.en.bin",
+    "model_path": "/path/to/mutterkey-model-package",
     "language": "en",
     "translate": false,
     "threads": 0,

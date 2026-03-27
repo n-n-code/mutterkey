@@ -1,0 +1,249 @@
+#include "transcription/modelcatalog.h"
+#include "transcription/modelpackage.h"
+#include "transcription/modelvalidator.h"
+#include "transcription/rawwhisperimporter.h"
+
+#include <QCryptographicHash>
+#include <QDir>
+#include <QFile>
+#include <QJsonDocument>
+#include <QTemporaryDir>
+#include <QtTest/QTest>
+
+#include <array>
+#include <cstring>
+
+namespace {
+
+class ModelPackageTest final : public QObject
+{
+    Q_OBJECT
+
+private slots:
+    void validatorAcceptsWellFormedPackage();
+    void validatorRejectsHashMismatch();
+    void catalogSupportsLegacyRawWhisperCompatibility();
+    void importerCreatesNativePackageFromRawWhisperFile();
+};
+
+template <typename T>
+bool writePaddedValue(QFile *file, const T &value)
+{
+    if (file == nullptr) {
+        return false;
+    }
+
+    QByteArray bytes(static_cast<qsizetype>(sizeof(T)), '\0');
+    std::memcpy(bytes.data(), &value, sizeof(T));
+    return file->write(bytes) == bytes.size();
+}
+
+bool writeRawWhisperFixture(const QString &path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly)) {
+        return false;
+    }
+
+    const quint32 magic = 0x67676d6cU;
+    const std::array<qint32, 11> values{
+        51864, // n_vocab
+        1500,  // n_audio_ctx
+        384,   // n_audio_state
+        6,     // n_audio_head
+        6,     // n_audio_layer
+        448,   // n_text_ctx
+        384,   // n_text_state
+        6,     // n_text_head
+        6,     // n_text_layer
+        80,    // n_mels
+        1,     // ftype
+    };
+
+    if (!writePaddedValue(&file, magic)) {
+        return false;
+    }
+    for (const qint32 value : values) {
+        if (!writePaddedValue(&file, value)) {
+            return false;
+        }
+    }
+    return file.write("fixture-whisper-weights", 23) == 23;
+}
+
+QString sha256ForFile(const QString &path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        return {};
+    }
+
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    hash.addData(&file);
+    return QString::fromLatin1(hash.result().toHex());
+}
+
+struct PackageFixtureRequest {
+    QString packageRoot;
+    QString weightsPayload;
+    QString hashOverride;
+};
+
+bool writePackage(const PackageFixtureRequest &request)
+{
+    const QDir root;
+    if (!root.mkpath(QDir(request.packageRoot).filePath(QStringLiteral("assets")))) {
+        return false;
+    }
+
+    const QString weightsPath = QDir(request.packageRoot).filePath(QStringLiteral("assets/model.bin"));
+    QFile weightsFile(weightsPath);
+    if (!weightsFile.open(QIODevice::WriteOnly)) {
+        return false;
+    }
+    weightsFile.write(request.weightsPayload.toUtf8());
+    weightsFile.close();
+
+    ModelPackageManifest manifest;
+    manifest.format = QStringLiteral("mutterkey.model-package");
+    manifest.schemaVersion = 1;
+    manifest.metadata.packageId = QStringLiteral("fixture-base-en");
+    manifest.metadata.displayName = QStringLiteral("Fixture Base EN");
+    manifest.metadata.runtimeFamily = QStringLiteral("asr");
+    manifest.metadata.sourceFormat = QStringLiteral("whisper.cpp-ggml");
+    manifest.metadata.modelFormat = QStringLiteral("ggml");
+    manifest.metadata.architecture = QStringLiteral("base");
+    manifest.metadata.languageProfile = QStringLiteral("en");
+    manifest.metadata.quantization = QStringLiteral("float16");
+    manifest.metadata.tokenizer = QStringLiteral("embedded");
+    manifest.compatibleEngines.push_back(ModelCompatibilityMarker{
+        .engine = QStringLiteral("whisper.cpp"),
+        .modelFormat = QStringLiteral("ggml"),
+    });
+    manifest.assets.push_back(ModelAssetMetadata{
+        .role = QStringLiteral("weights"),
+        .relativePath = QStringLiteral("assets/model.bin"),
+        .sha256 = request.hashOverride.isEmpty() ? sha256ForFile(weightsPath) : request.hashOverride,
+        .sizeBytes = QFileInfo(weightsPath).size(),
+    });
+
+    QFile manifestFile(QDir(request.packageRoot).filePath(QStringLiteral("model.json")));
+    if (!manifestFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        return false;
+    }
+    manifestFile.write(QJsonDocument(modelPackageManifestToJson(manifest)).toJson(QJsonDocument::Indented));
+    return true;
+}
+
+} // namespace
+
+void ModelPackageTest::validatorAcceptsWellFormedPackage()
+{
+    // WHAT: Verify that a well-formed native model package passes validation.
+    // HOW: Create a temporary package directory with a valid manifest, weights file, and hash,
+    // then validate it for the whisper.cpp / ggml runtime markers.
+    // WHY: The product-owned package gate only helps if valid packages can be accepted before
+    // inference begins while malformed ones are rejected deterministically.
+    const QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString packageRoot = tempDir.filePath(QStringLiteral("fixture-package"));
+    QVERIFY(writePackage(PackageFixtureRequest{
+        .packageRoot = packageRoot,
+        .weightsPayload = QStringLiteral("fixture weights"),
+    }));
+
+    RuntimeError error;
+    const std::optional<ValidatedModelPackage> package =
+        ModelValidator::validatePackagePath(packageRoot, QStringLiteral("whisper.cpp"), QStringLiteral("ggml"), &error);
+
+    if (!package.has_value()) {
+        QFAIL("Expected validated package");
+        return;
+    }
+    QVERIFY(error.isOk());
+    const ValidatedModelPackage &validatedPackage = *package;
+    QCOMPARE(validatedPackage.metadata().packageId, QStringLiteral("fixture-base-en"));
+    QCOMPARE(validatedPackage.weightsPath, QDir(packageRoot).filePath(QStringLiteral("assets/model.bin")));
+}
+
+void ModelPackageTest::validatorRejectsHashMismatch()
+{
+    // WHAT: Verify that the package validator rejects a manifest whose hash does not match the weights asset.
+    // HOW: Create a normal package but force the manifest SHA-256 to an incorrect value, then validate it.
+    // WHY: Integrity checks are the main reason Phase 4 exists, so a mismatched asset hash must fail
+    // before the runtime can hand the file to whisper.cpp.
+    const QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString packageRoot = tempDir.filePath(QStringLiteral("broken-package"));
+    QVERIFY(writePackage(PackageFixtureRequest{
+        .packageRoot = packageRoot,
+        .weightsPayload = QStringLiteral("fixture weights"),
+        .hashOverride = QStringLiteral("deadbeef"),
+    }));
+
+    RuntimeError error;
+    const std::optional<ValidatedModelPackage> package = ModelValidator::validatePackagePath(packageRoot, {}, {}, &error);
+
+    QVERIFY(!package.has_value());
+    QCOMPARE(error.code, RuntimeErrorCode::ModelIntegrityFailed);
+}
+
+void ModelPackageTest::catalogSupportsLegacyRawWhisperCompatibility()
+{
+    // WHAT: Verify that the catalog can inspect a legacy raw Whisper model file through the compatibility path.
+    // HOW: Write a minimal raw whisper.cpp ggml header fixture and inspect it through the model catalog.
+    // WHY: Phase 4 keeps raw Whisper files supported during migration, but that support should still flow
+    // through product-owned inspection rather than backend-specific loader behavior.
+    const QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString rawPath = tempDir.filePath(QStringLiteral("ggml-base.en.bin"));
+    QVERIFY(writeRawWhisperFixture(rawPath));
+
+    RuntimeError error;
+    const std::optional<ValidatedModelPackage> package = ModelCatalog::inspectPath(rawPath, {}, {}, &error);
+
+    if (!package.has_value()) {
+        QFAIL("Expected legacy compatibility package");
+        return;
+    }
+    QVERIFY(error.isOk());
+    const ValidatedModelPackage &legacyPackage = *package;
+    QVERIFY(legacyPackage.isLegacyCompatibility());
+    QCOMPARE(legacyPackage.metadata().sourceFormat, QStringLiteral("whisper.cpp-ggml"));
+    QCOMPARE(legacyPackage.metadata().modelFormat, QStringLiteral("ggml"));
+}
+
+void ModelPackageTest::importerCreatesNativePackageFromRawWhisperFile()
+{
+    // WHAT: Verify that importing a legacy raw Whisper file produces a validated native package.
+    // HOW: Create a minimal raw fixture, import it into a temporary models directory, and then
+    // validate the resulting package through the normal package validator.
+    // WHY: The native package format only becomes practical if there is a deterministic migration
+    // path from the raw whisper.cpp files users already have on disk.
+    const QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString rawPath = tempDir.filePath(QStringLiteral("ggml-base.en.bin"));
+    QVERIFY(writeRawWhisperFixture(rawPath));
+
+    RuntimeError error;
+    const std::optional<ValidatedModelPackage> imported =
+        RawWhisperImporter::importFile(rawPath,
+                                       RawWhisperImportRequest{
+                                           .outputPath = tempDir.filePath(QStringLiteral("base-en")),
+                                       },
+                                       &error);
+
+    if (!imported.has_value()) {
+        QFAIL("Expected imported native package");
+        return;
+    }
+    QVERIFY(error.isOk());
+    const ValidatedModelPackage &importedPackage = *imported;
+    QVERIFY(!importedPackage.isLegacyCompatibility());
+    QVERIFY(QFileInfo::exists(importedPackage.manifestPath));
+    QVERIFY(QFileInfo::exists(importedPackage.weightsPath));
+}
+
+QTEST_APPLESS_MAIN(ModelPackageTest)
+
+#include "modelpackagetest.moc"

@@ -34,6 +34,12 @@ public:
     [[nodiscard]] virtual QString backendName() const = 0;
 
     /**
+     * @brief Returns product-owned immutable metadata for the loaded artifact.
+     * @return Metadata surfaced without exposing backend-specific handles.
+     */
+    [[nodiscard]] virtual ModelMetadata metadata() const = 0;
+
+    /**
      * @brief Returns a human-readable description of the loaded model.
      * @return Diagnostic model description such as the resolved model path.
      */

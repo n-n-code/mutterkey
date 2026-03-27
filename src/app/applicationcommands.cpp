@@ -5,6 +5,9 @@
 #include "audio/recording.h"
 #include "clipboardwriter.h"
 #include "control/daemoncontrolserver.h"
+#include "transcription/modelcatalog.h"
+#include "transcription/modelpackage.h"
+#include "transcription/rawwhisperimporter.h"
 #include "service.h"
 #include "transcription/transcriptioncompat.h"
 #include "transcription/transcriptionengine.h"
@@ -14,6 +17,8 @@
 #include <QCoreApplication>
 #include <QGuiApplication>
 #include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QLoggingCategory>
 #include <QObject>
 #include <QString>
@@ -155,4 +160,103 @@ int runDiagnose(QGuiApplication &app, const AppConfig &config, double seconds, b
     });
 
     return QGuiApplication::exec();
+}
+
+namespace {
+
+QJsonObject metadataToJson(const ModelMetadata &metadata)
+{
+    return QJsonObject{
+        {QStringLiteral("package_id"), metadata.packageId},
+        {QStringLiteral("display_name"), metadata.displayName},
+        {QStringLiteral("package_version"), metadata.packageVersion},
+        {QStringLiteral("runtime_family"), metadata.runtimeFamily},
+        {QStringLiteral("source_format"), metadata.sourceFormat},
+        {QStringLiteral("model_format"), metadata.modelFormat},
+        {QStringLiteral("architecture"), metadata.architecture},
+        {QStringLiteral("language_profile"), metadata.languageProfile},
+        {QStringLiteral("quantization"), metadata.quantization},
+        {QStringLiteral("tokenizer"), metadata.tokenizer},
+        {QStringLiteral("legacy_compatibility"), metadata.legacyCompatibility},
+        {QStringLiteral("vocabulary_size"), metadata.vocabularySize},
+        {QStringLiteral("audio_context"), metadata.audioContext},
+        {QStringLiteral("audio_state"), metadata.audioState},
+        {QStringLiteral("audio_head_count"), metadata.audioHeadCount},
+        {QStringLiteral("audio_layer_count"), metadata.audioLayerCount},
+        {QStringLiteral("text_context"), metadata.textContext},
+        {QStringLiteral("text_state"), metadata.textState},
+        {QStringLiteral("text_head_count"), metadata.textHeadCount},
+        {QStringLiteral("text_layer_count"), metadata.textLayerCount},
+        {QStringLiteral("mel_count"), metadata.melCount},
+        {QStringLiteral("format_type"), metadata.formatType},
+    };
+}
+
+QJsonArray compatibilityToJson(const std::vector<ModelCompatibilityMarker> &markers)
+{
+    QJsonArray array;
+    for (const ModelCompatibilityMarker &marker : markers) {
+        array.append(QJsonObject{
+            {QStringLiteral("engine"), marker.engine},
+            {QStringLiteral("model_format"), marker.modelFormat},
+        });
+    }
+    return array;
+}
+
+QJsonArray assetsToJson(const std::vector<ModelAssetMetadata> &assets)
+{
+    QJsonArray array;
+    for (const ModelAssetMetadata &asset : assets) {
+        array.append(QJsonObject{
+            {QStringLiteral("role"), asset.role},
+            {QStringLiteral("path"), asset.relativePath},
+            {QStringLiteral("sha256"), asset.sha256},
+            {QStringLiteral("size_bytes"), asset.sizeBytes},
+        });
+    }
+    return array;
+}
+
+} // namespace
+
+int runModelImport(const QString &sourcePath, const QString &outputPath, const QString &packageIdOverride)
+{
+    RuntimeError runtimeError;
+    const std::optional<ValidatedModelPackage> package =
+        RawWhisperImporter::importFile(sourcePath,
+                                       RawWhisperImportRequest{
+                                           .outputPath = outputPath,
+                                           .packageIdOverride = packageIdOverride,
+                                       },
+                                       &runtimeError);
+    if (!package.has_value()) {
+        qCCritical(appLog) << "Model import failed:" << runtimeError.message;
+        return 1;
+    }
+
+    QTextStream(stdout) << package->packageRootPath << Qt::endl;
+    return 0;
+}
+
+int runModelInspect(const QString &path)
+{
+    RuntimeError runtimeError;
+    const std::optional<ValidatedModelPackage> package = ModelCatalog::inspectPath(path, {}, {}, &runtimeError);
+    if (!package.has_value()) {
+        qCCritical(appLog) << "Model inspect failed:" << runtimeError.message;
+        return 1;
+    }
+
+    QJsonObject object;
+    object.insert(QStringLiteral("package_root"), package->packageRootPath);
+    object.insert(QStringLiteral("manifest_path"), package->manifestPath);
+    object.insert(QStringLiteral("source_path"), package->sourcePath);
+    object.insert(QStringLiteral("weights_path"), package->weightsPath);
+    object.insert(QStringLiteral("description"), package->description());
+    object.insert(QStringLiteral("metadata"), metadataToJson(package->metadata()));
+    object.insert(QStringLiteral("compatible_engines"), compatibilityToJson(package->manifest.compatibleEngines));
+    object.insert(QStringLiteral("assets"), assetsToJson(package->manifest.assets));
+    QTextStream(stdout) << QJsonDocument(object).toJson(QJsonDocument::Indented);
+    return 0;
 }

@@ -9,6 +9,8 @@ Current architecture:
 - Global shortcut handling goes through `KGlobalAccel`
 - Audio capture uses Qt Multimedia
 - Transcription is in-process through vendored `whisper.cpp`
+- Native Mutterkey model packages are now the canonical model artifact; raw
+  whisper.cpp-compatible `.bin` files remain only as a migration/import path
 - The public runtime seam is streaming-first through app-owned chunks, events, and compatibility helpers
 - Static backend support lives in `BackendCapabilities`, while runtime/device/model inspection lives in `RuntimeDiagnostics`
 - Clipboard writes prefer `KSystemClipboard` with `QClipboard` fallback
@@ -35,6 +37,11 @@ This repository is intentionally kept minimal:
 - `src/clipboardwriter.*`: clipboard integration, preferring KDE system clipboard support
 - `src/audio/recordingnormalizer.*`: conversion to runtime-ready mono `float32` at `16 kHz`
 - `src/transcription/audiochunker.*`: deterministic chunking of normalized audio for the streaming runtime path
+- `src/transcription/modelpackage.*`: product-owned manifest and validated package value types
+- `src/transcription/modelvalidator.*`: package integrity, compatibility, and bounds validation
+- `src/transcription/modelcatalog.*`: model artifact inspection and resolution
+- `src/transcription/rawwhisperprobe.*`: lightweight raw whisper.cpp header inspection used for migration compatibility
+- `src/transcription/rawwhisperimporter.*`: import path from raw Whisper `.bin` files into native Mutterkey packages
 - `src/transcription/transcriptassembler.*`: final transcript assembly from streaming transcript events
 - `src/transcription/transcriptioncompat.*`: compatibility wrapper that routes one-shot recordings through the streaming runtime seam
 - `src/transcription/whispercpptranscriber.*`: in-process Whisper integration and whisper-specific engine construction
@@ -112,7 +119,7 @@ QT_QPA_PLATFORM=offscreen "$BUILD_DIR/mutterkey" diagnose 1
 
 Notes:
 
-- `once` mode requires microphone access and a valid Whisper model path
+- `once` mode requires microphone access and a valid model artifact path
 - Real transcription verification needs a configured model in `~/.config/mutterkey/config.json` or a custom config path
 - A small `Qt Test` + `CTest` suite exists for config loading, audio normalization, streaming-runtime helpers, and transcription-worker orchestration, including malformed JSON, wrong-type config inputs, recording-normalizer edge cases, and fake streaming backend behavior
 - Repo-owned test cases are expected to carry `WHAT/HOW/WHY` comments near the start of each real test body; `scripts/check-test-commentary.sh` and `scripts/check-release-hygiene.sh` enforce that convention
@@ -130,6 +137,9 @@ Notes:
 - Use `cmake --build "$BUILD_DIR" --target docs` when touching repo-owned public headers, Doxygen config, the Doxygen main page, or CI/docs wiring
 - If install rules or licensing files change, confirm the temporary install contains the expected files under `share/licenses/mutterkey`
 - If you add or change public methods in repo-owned headers, expect `cmake --build "$BUILD_DIR" --target docs` to fail until the new API is documented; treat that as part of the normal implementation loop, not follow-up polish
+- Newly added repo-owned public structs and free functions in public headers also
+  need Doxygen comments immediately; the `docs` target treats undocumented new
+  API surface as a real failure, not optional cleanup
 
 ## Tooling Best Practices
 
@@ -166,11 +176,17 @@ Notes:
 - Avoid introducing optional backends, plugin systems, or cross-platform abstractions unless the task requires them
 - Keep the audio path explicit: recorder output may not already match Whisper input requirements, so preserve normalization behavior
 - Prefer product-owned naming such as runtime audio, chunks, events, diagnostics, and compatibility wrappers over backend-shaped naming when touching app-owned code
+- Prefer product-owned model terminology too: package, manifest, catalog, metadata,
+  compatibility marker, and model artifact path are the primary nouns now;
+  reserve backend-shaped wording for the whisper adapter or raw-file migration path
 - Prefer narrow shared value types across subsystems; for example, consumers that only need captured audio should include `src/audio/recording.h`, not the full recorder class
 - Keep JSON and other transport details at subsystem boundaries; prefer typed C++ snapshots/results once data crosses into app-owned control, tray, or service code
 - Prefer dependency injection for tray-shell and control-surface code from the first implementation so headless Qt tests stay simple
 - When preparing the transcription path for future runtime work, prefer app-owned engine/session seams and injected sessions over leaking concrete backend types into CLI, service, or worker orchestration. Keep immutable capability reporting on the engine side, keep runtime inspection data in `RuntimeDiagnostics`, and keep the session side focused on mutable decode state, warmup, chunk ingestion, finish, and cancellation
 - Prefer product-owned runtime interfaces, model/session separation, and deterministic backend selection before adding new inference backends or widening cross-platform support
+- Keep model validation, metadata extraction, and compatibility checks app-owned.
+  `whisper.cpp` should not be the first component that tells Mutterkey whether a
+  model artifact is obviously malformed, incompatible, or oversized
 - Keep compatibility shims explicit in naming. If a one-shot daemon/CLI path is implemented on top of the streaming runtime seam, name it as a compatibility wrapper rather than making the old one-shot shape look like the primary contract
 - Keep backend-specific validation out of `src/config.*` when practical. Product config parsing should normalize and preserve user input, while backend support checks should live in the app-owned runtime layer near `src/transcription/*`
 - Preserve the current product direction: embedded `whisper.cpp`, KDE-first, CLI/service-first
@@ -199,6 +215,9 @@ Apply the C++ Core Guidelines selectively and pragmatically. For this repo, the 
 - `scripts/update-whisper.sh` requires a clean Git work tree before it will fetch or run subtree operations
 - Treat `third_party/whisper.cpp` as subtree-managed vendor content and update it through the helper script rather than manual directory replacement
 - Prefer changing app-side integration code before patching vendored dependency code
+- Prefer resolving model-package, metadata, and import work entirely in app-owned
+  code. Raw whisper.cpp `.bin` support is now a compatibility/import concern, not
+  the canonical product contract
 - Prefer keeping fake runtime tests and app-owned helpers free of vendored whisper linkage unless the test is specifically about the whisper adapter or engine factory
 - Prefer fixing vendored target metadata from the top-level CMake when the issue is Mutterkey packaging or warning noise, instead of patching upstream vendored files directly
 - If you must modify vendored code, document why in the final response and record the deviation in `third_party/whisper.cpp.UPSTREAM.md`
@@ -209,6 +228,9 @@ Apply the C++ Core Guidelines selectively and pragmatically. For this repo, the 
 - Repo-owned source is MIT-licensed in `LICENSE`
 - Third-party licensing and provenance notes live in `THIRD_PARTY_NOTICES.md`
 - `whisper.cpp` model files are not bundled; do not add model binaries to the repository
+- Native Mutterkey model packages also must not be committed to the repository;
+  if a release needs to ship one, include it only in the release artifact or as a
+  separate release asset outside Git
 - Do not introduce machine-specific home-directory paths, absolute local Markdown links, or generated build artifacts into tracked files
 - If a task changes install layout or shipped assets, keep the CMake install rules and license installs aligned with the new behavior
 - The installed shared-library payload is runtime-focused; do not start installing vendored upstream public headers unless the package contract intentionally changes
@@ -232,8 +254,15 @@ Default config path:
 Typical model location:
 
 ```text
-~/.local/share/mutterkey/models/ggml-base.en.bin
+~/.local/share/mutterkey/models/<package-id>
 ```
+
+Current `transcriber.model_path` semantics:
+
+- package directory is the canonical target
+- `model.json` manifest path is also accepted
+- raw whisper.cpp-compatible `.bin` files are accepted only as a migration
+  compatibility path
 
 ## Agent Workflow
 
@@ -241,6 +270,8 @@ Typical model location:
 - Prefer targeted changes over speculative cleanup
 - If a change grows daemon, tray, or control-plane behavior, prefer extracting or extending repo-owned libraries under `src/app/`, `src/control/`, or other focused modules instead of piling more orchestration into `src/main.cpp`
 - Update `README.md` and `config.example.json` when behavior or setup changes
+- Update `RELEASE_CHECKLIST.md` too when release-facing model packaging, shipped
+  assets, or release-bundle guidance changes
 - Update `contrib/mutterkey.service` and `contrib/org.mutterkey.mutterkey.desktop` when service/desktop behavior changes
 - Update `LICENSE`, `THIRD_PARTY_NOTICES.md`, CMake install rules, and `third_party/whisper.cpp.UPSTREAM.md` when packaging, licensing, or vendored dependency behavior changes
 - Keep `README.md`, `AGENTS.md`, and any relevant local skills aligned with the current `scripts/update-whisper.sh` workflow when the vendor-update process changes
@@ -262,7 +293,9 @@ Typical model location:
 - Prefer the `lint` target for a full pre-handoff analyzer pass, and use the individual analyzer targets when iterating on one class of warnings
 - Run `bash scripts/run-valgrind.sh "$BUILD_DIR"` before handoff when the task is specifically about memory, ownership, lifetime, shutdown, or release hardening
 - Run `bash scripts/check-release-hygiene.sh` before handoff when the task touches publication-facing files or repository metadata
-- Remember that the release-hygiene script now also enforces test commentary coverage, so changes to test structure or helper scripts may need both test updates and commentary updates
+- Remember that the release-hygiene script now also enforces test commentary
+  coverage and rejects tracked `.bin` / `.gguf` artifacts, so release-facing or
+  helper-script changes may need both commentary updates and binary-artifact policy checks
 - If `QT_QPA_PLATFORM=offscreen "$BUILD_DIR/mutterkey" diagnose 1` fails in a headless environment after model loading or during KDE/session-dependent startup, note that limitation explicitly rather than assuming the runtime seam or docs-only change regressed behavior
 - A headless `diagnose 1` failure after whisper model loading still does not necessarily indicate a streaming-runtime regression; separate runtime-contract changes from KDE/session or headless-environment limits
 - Do not leave generated artifacts in the repository tree at the end of the task
