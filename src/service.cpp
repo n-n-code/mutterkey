@@ -80,6 +80,8 @@ QJsonObject MutterkeyService::diagnostics() const
     object.insert(QStringLiteral("transcriptions_completed"), m_transcriptionsCompleted);
     object.insert(QStringLiteral("transcriber_backend"),
                   m_transcriptionWorker != nullptr ? m_transcriptionWorker->backendName() : QStringLiteral("unconfigured"));
+    object.insert(QStringLiteral("transcriber_model"),
+                  m_transcriptionWorker != nullptr ? m_transcriptionWorker->loadedModelDescription() : QString());
     const BackendCapabilities capabilities =
         m_transcriptionWorker != nullptr ? m_transcriptionWorker->capabilities() : m_transcriptionEngine->capabilities();
     object.insert(QStringLiteral("transcriber_runtime"), capabilities.runtimeDescription);

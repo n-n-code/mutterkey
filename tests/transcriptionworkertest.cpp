@@ -6,8 +6,10 @@
 #include <QSignalSpy>
 #include <QtTest/QTest>
 
+#include <algorithm>
 #include <memory>
 #include <utility>
+#include <vector>
 
 namespace {
 
@@ -22,6 +24,20 @@ BackendCapabilities fakeCapabilities()
         .supportsWarmup = true,
     };
 }
+
+class FakeModelHandle final : public TranscriptionModelHandle
+{
+public:
+    [[nodiscard]] QString backendName() const override
+    {
+        return QStringLiteral("fake");
+    }
+
+    [[nodiscard]] QString modelDescription() const override
+    {
+        return QStringLiteral("fake-model");
+    }
+};
 
 class FakeTranscriptionSession final : public TranscriptionSession
 {
@@ -52,21 +68,37 @@ public:
         return m_result;
     }
 
+    void cancel() override
+    {
+        m_cancelled = true;
+    }
+
     void setWarmupError(RuntimeError warmupError)
     {
         m_warmupError = std::move(warmupError);
     }
 
+    [[nodiscard]] bool wasCancelled() const
+    {
+        return m_cancelled;
+    }
+
 private:
     TranscriptionResult m_result;
     RuntimeError m_warmupError;
+    bool m_cancelled = false;
 };
 
 class FakeTranscriptionEngine final : public TranscriptionEngine
 {
 public:
-    explicit FakeTranscriptionEngine(std::unique_ptr<FakeTranscriptionSession> session)
-        : m_session(std::move(session))
+    explicit FakeTranscriptionEngine(TranscriptionResult result)
+        : m_results{std::move(result)}
+    {
+    }
+
+    explicit FakeTranscriptionEngine(std::vector<TranscriptionResult> results)
+        : m_results(std::move(results))
     {
     }
 
@@ -75,10 +107,28 @@ public:
         return fakeCapabilities();
     }
 
-    [[nodiscard]] std::unique_ptr<TranscriptionSession> createSession() const override
+    [[nodiscard]] std::shared_ptr<const TranscriptionModelHandle> loadModel(RuntimeError *error) const override
+    {
+        Q_UNUSED(error);
+        ++m_loadModelCalls;
+        if (m_model == nullptr) {
+            m_model = std::make_shared<FakeModelHandle>();
+        }
+        return m_model;
+    }
+
+    [[nodiscard]] std::unique_ptr<TranscriptionSession>
+    createSession(std::shared_ptr<const TranscriptionModelHandle> model) const override
     {
         ++m_createSessionCalls;
-        return std::move(m_session);
+        m_lastModel = std::move(model);
+        const int resultIndex = std::min<int>(m_createSessionCalls - 1, static_cast<int>(m_results.size()) - 1);
+        return std::make_unique<FakeTranscriptionSession>(m_results.at(resultIndex));
+    }
+
+    [[nodiscard]] int loadModelCalls() const
+    {
+        return m_loadModelCalls;
     }
 
     [[nodiscard]] int createSessionCalls() const
@@ -86,9 +136,17 @@ public:
         return m_createSessionCalls;
     }
 
+    [[nodiscard]] bool lastCreateSessionHadModel() const
+    {
+        return m_lastModel != nullptr;
+    }
+
 private:
+    std::vector<TranscriptionResult> m_results;
+    mutable int m_loadModelCalls = 0;
     mutable int m_createSessionCalls = 0;
-    mutable std::unique_ptr<FakeTranscriptionSession> m_session;
+    mutable std::shared_ptr<const TranscriptionModelHandle> m_model;
+    mutable std::shared_ptr<const TranscriptionModelHandle> m_lastModel;
 };
 
 class TranscriptionWorkerTest final : public QObject
@@ -102,6 +160,8 @@ private slots:
     void emitsFailureSignalForFailedTranscription();
     void surfacesWarmupFailure();
     void lazilyCreatesSessionFromInjectedEngine();
+    void recreatesSessionAfterTerminalFailureWithoutReloadingModel();
+    void whisperEngineSurfacesMissingModelAtLoadTime();
     void whisperRuntimeRejectsUnsupportedLanguage();
 };
 
@@ -176,20 +236,67 @@ void TranscriptionWorkerTest::surfacesWarmupFailure()
 
 void TranscriptionWorkerTest::lazilyCreatesSessionFromInjectedEngine()
 {
-    auto session =
-        std::make_unique<FakeTranscriptionSession>(TranscriptionResult{.success = true, .text = QStringLiteral("engine path")});
-    const std::shared_ptr<FakeTranscriptionEngine> engine = std::make_shared<FakeTranscriptionEngine>(std::move(session));
+    const std::shared_ptr<FakeTranscriptionEngine> engine = std::make_shared<FakeTranscriptionEngine>(
+        TranscriptionResult{.success = true, .text = QStringLiteral("engine path")});
     TranscriptionWorker worker(engine);
     const QSignalSpy readySpy(&worker, &TranscriptionWorker::transcriptionReady);
 
+    QCOMPARE(engine->loadModelCalls(), 0);
     QCOMPARE(engine->createSessionCalls(), 0);
     QCOMPARE(worker.backendName(), QStringLiteral("fake"));
 
     worker.transcribe(Recording{});
 
+    QCOMPARE(engine->loadModelCalls(), 1);
     QCOMPARE(engine->createSessionCalls(), 1);
+    QVERIFY(engine->lastCreateSessionHadModel());
     QCOMPARE(readySpy.count(), 1);
     QCOMPARE(readySpy.at(0).at(0).toString(), QStringLiteral("engine path"));
+}
+
+void TranscriptionWorkerTest::recreatesSessionAfterTerminalFailureWithoutReloadingModel()
+{
+    const std::shared_ptr<FakeTranscriptionEngine> engine = std::make_shared<FakeTranscriptionEngine>(
+        std::vector<TranscriptionResult>{
+            TranscriptionResult{
+                .success = false,
+                .text = {},
+                .error = RuntimeError{
+                    .code = RuntimeErrorCode::DecodeFailed,
+                    .message = QStringLiteral("decode failed"),
+                },
+            },
+            TranscriptionResult{
+                .success = true,
+                .text = QStringLiteral("recovered"),
+            },
+        });
+    TranscriptionWorker worker(engine);
+    const QSignalSpy readySpy(&worker, &TranscriptionWorker::transcriptionReady);
+    const QSignalSpy failedSpy(&worker, &TranscriptionWorker::transcriptionFailed);
+
+    worker.transcribe(Recording{});
+    worker.transcribe(Recording{});
+
+    QCOMPARE(engine->loadModelCalls(), 1);
+    QCOMPARE(engine->createSessionCalls(), 2);
+    QCOMPARE(failedSpy.count(), 1);
+    QCOMPARE(readySpy.count(), 1);
+    QCOMPARE(readySpy.at(0).at(0).toString(), QStringLiteral("recovered"));
+}
+
+void TranscriptionWorkerTest::whisperEngineSurfacesMissingModelAtLoadTime()
+{
+    TranscriberConfig config;
+    config.modelPath = QStringLiteral("/tmp/definitely-missing-mutterkey-model.bin");
+
+    const std::shared_ptr<const TranscriptionEngine> engine = createTranscriptionEngine(config);
+    RuntimeError error;
+    const std::shared_ptr<const TranscriptionModelHandle> model = engine->loadModel(&error);
+
+    QVERIFY(model == nullptr);
+    QCOMPARE(error.code, RuntimeErrorCode::ModelNotFound);
+    QVERIFY(error.message.contains(QStringLiteral("Embedded Whisper model not found")));
 }
 
 void TranscriptionWorkerTest::whisperRuntimeRejectsUnsupportedLanguage()
@@ -197,7 +304,8 @@ void TranscriptionWorkerTest::whisperRuntimeRejectsUnsupportedLanguage()
     TranscriberConfig config;
     config.modelPath = QStringLiteral("/tmp/unused.bin");
     config.language = QStringLiteral("pirate");
-    WhisperCppTranscriber transcriber(config);
+    const std::shared_ptr<const TranscriptionModelHandle> model = std::make_shared<FakeModelHandle>();
+    WhisperCppTranscriber transcriber(config, model);
 
     const TranscriptionResult result = transcriber.transcribe(Recording{});
 

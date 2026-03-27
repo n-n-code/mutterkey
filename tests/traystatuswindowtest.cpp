@@ -8,6 +8,17 @@
 
 namespace {
 
+template <typename T>
+T &requireChild(const QObject &parent, const char *objectName)
+{
+    auto *child = parent.findChild<T *>(QLatin1StringView(objectName));
+    if (child == nullptr) {
+        qFatal("Missing child widget: %s", objectName);
+    }
+
+    return *child;
+}
+
 class FakeDaemonControlSession final : public DaemonControlSession
 {
 public:
@@ -59,17 +70,13 @@ void TrayStatusWindowTest::refreshShowsOfflineStateWhenTransportFails()
 
     const TrayStatusWindow window(&client);
 
-    auto *connectionValue = window.findChild<QLabel *>(QStringLiteral("connectionValue"));
-    auto *configPathValue = window.findChild<QLabel *>(QStringLiteral("configPathValue"));
-    auto *statusJsonView = window.findChild<QPlainTextEdit *>(QStringLiteral("statusJsonView"));
+    const QLabel &connectionValue = requireChild<QLabel>(window, "connectionValue");
+    const QLabel &configPathValue = requireChild<QLabel>(window, "configPathValue");
+    const QPlainTextEdit &statusJsonView = requireChild<QPlainTextEdit>(window, "statusJsonView");
 
-    QVERIFY(connectionValue != nullptr);
-    QVERIFY(configPathValue != nullptr);
-    QVERIFY(statusJsonView != nullptr);
-
-    QCOMPARE(connectionValue->text(), QStringLiteral("Daemon unavailable"));
-    QCOMPARE(configPathValue->text(), QStringLiteral("-"));
-    QVERIFY(statusJsonView->toPlainText().contains(QStringLiteral("Connection refused")));
+    QCOMPARE(connectionValue.text(), QStringLiteral("Daemon unavailable"));
+    QCOMPARE(configPathValue.text(), QStringLiteral("-"));
+    QVERIFY(statusJsonView.toPlainText().contains(QStringLiteral("Connection refused")));
 }
 
 void TrayStatusWindowTest::refreshPopulatesValuesOnSuccessfulResponses()
@@ -99,23 +106,17 @@ void TrayStatusWindowTest::refreshPopulatesValuesOnSuccessfulResponses()
 
     const TrayStatusWindow window(&client);
 
-    auto *connectionValue = window.findChild<QLabel *>(QStringLiteral("connectionValue"));
-    auto *configPathValue = window.findChild<QLabel *>(QStringLiteral("configPathValue"));
-    auto *shortcutValue = window.findChild<QLabel *>(QStringLiteral("shortcutValue"));
-    auto *modelPathValue = window.findChild<QLabel *>(QStringLiteral("modelPathValue"));
-    auto *statusJsonView = window.findChild<QPlainTextEdit *>(QStringLiteral("statusJsonView"));
+    const QLabel &connectionValue = requireChild<QLabel>(window, "connectionValue");
+    const QLabel &configPathValue = requireChild<QLabel>(window, "configPathValue");
+    const QLabel &shortcutValue = requireChild<QLabel>(window, "shortcutValue");
+    const QLabel &modelPathValue = requireChild<QLabel>(window, "modelPathValue");
+    const QPlainTextEdit &statusJsonView = requireChild<QPlainTextEdit>(window, "statusJsonView");
 
-    QVERIFY(connectionValue != nullptr);
-    QVERIFY(configPathValue != nullptr);
-    QVERIFY(shortcutValue != nullptr);
-    QVERIFY(modelPathValue != nullptr);
-    QVERIFY(statusJsonView != nullptr);
-
-    QCOMPARE(connectionValue->text(), QStringLiteral("Connected"));
-    QCOMPARE(configPathValue->text(), QStringLiteral("/tmp/mutterkey.json"));
-    QCOMPARE(shortcutValue->text(), QStringLiteral("Meta+F8"));
-    QCOMPARE(modelPathValue->text(), QStringLiteral("/tmp/model.bin"));
-    QVERIFY(statusJsonView->toPlainText().contains(QStringLiteral("daemon_running")));
+    QCOMPARE(connectionValue.text(), QStringLiteral("Connected"));
+    QCOMPARE(configPathValue.text(), QStringLiteral("/tmp/mutterkey.json"));
+    QCOMPARE(shortcutValue.text(), QStringLiteral("Meta+F8"));
+    QCOMPARE(modelPathValue.text(), QStringLiteral("/tmp/model.bin"));
+    QVERIFY(statusJsonView.toPlainText().contains(QStringLiteral("daemon_running")));
 }
 
 void TrayStatusWindowTest::refreshShowsOfflineStateWhenConfigRequestFails()
@@ -138,14 +139,11 @@ void TrayStatusWindowTest::refreshShowsOfflineStateWhenConfigRequestFails()
 
     const TrayStatusWindow window(&client);
 
-    auto *connectionValue = window.findChild<QLabel *>(QStringLiteral("connectionValue"));
-    auto *statusJsonView = window.findChild<QPlainTextEdit *>(QStringLiteral("statusJsonView"));
+    const QLabel &connectionValue = requireChild<QLabel>(window, "connectionValue");
+    const QPlainTextEdit &statusJsonView = requireChild<QPlainTextEdit>(window, "statusJsonView");
 
-    QVERIFY(connectionValue != nullptr);
-    QVERIFY(statusJsonView != nullptr);
-
-    QCOMPARE(connectionValue->text(), QStringLiteral("Daemon unavailable"));
-    QVERIFY(statusJsonView->toPlainText().contains(QStringLiteral("Config unavailable")));
+    QCOMPARE(connectionValue.text(), QStringLiteral("Daemon unavailable"));
+    QVERIFY(statusJsonView.toPlainText().contains(QStringLiteral("Config unavailable")));
 }
 
 void TrayStatusWindowTest::refreshUpdatesFromOfflineToConnected()
@@ -178,16 +176,13 @@ void TrayStatusWindowTest::refreshUpdatesFromOfflineToConnected()
 
     window.refresh();
 
-    auto *connectionValue = window.findChild<QLabel *>(QStringLiteral("connectionValue"));
-    auto *configPathValue = window.findChild<QLabel *>(QStringLiteral("configPathValue"));
-    auto *statusJsonView = window.findChild<QPlainTextEdit *>(QStringLiteral("statusJsonView"));
+    const QLabel &connectionValue = requireChild<QLabel>(window, "connectionValue");
+    const QLabel &configPathValue = requireChild<QLabel>(window, "configPathValue");
+    const QPlainTextEdit &statusJsonView = requireChild<QPlainTextEdit>(window, "statusJsonView");
 
-    QVERIFY(connectionValue != nullptr);
-    QVERIFY(configPathValue != nullptr);
-    QVERIFY(statusJsonView != nullptr);
-    QCOMPARE(connectionValue->text(), QStringLiteral("Connected"));
-    QCOMPARE(configPathValue->text(), QStringLiteral("/tmp/mutterkey.json"));
-    QVERIFY(statusJsonView->toPlainText().contains(QStringLiteral("daemon_running")));
+    QCOMPARE(connectionValue.text(), QStringLiteral("Connected"));
+    QCOMPARE(configPathValue.text(), QStringLiteral("/tmp/mutterkey.json"));
+    QVERIFY(statusJsonView.toPlainText().contains(QStringLiteral("daemon_running")));
 }
 
 void TrayStatusWindowTest::refreshUpdatesFromConnectedToOffline()
@@ -220,16 +215,13 @@ void TrayStatusWindowTest::refreshUpdatesFromConnectedToOffline()
     client.setStatusResult(DaemonStatusResult{.success = false, .snapshot = {}, .errorMessage = QStringLiteral("Connection refused")});
     window.refresh();
 
-    auto *connectionValue = window.findChild<QLabel *>(QStringLiteral("connectionValue"));
-    auto *configPathValue = window.findChild<QLabel *>(QStringLiteral("configPathValue"));
-    auto *statusJsonView = window.findChild<QPlainTextEdit *>(QStringLiteral("statusJsonView"));
+    const QLabel &connectionValue = requireChild<QLabel>(window, "connectionValue");
+    const QLabel &configPathValue = requireChild<QLabel>(window, "configPathValue");
+    const QPlainTextEdit &statusJsonView = requireChild<QPlainTextEdit>(window, "statusJsonView");
 
-    QVERIFY(connectionValue != nullptr);
-    QVERIFY(configPathValue != nullptr);
-    QVERIFY(statusJsonView != nullptr);
-    QCOMPARE(connectionValue->text(), QStringLiteral("Daemon unavailable"));
-    QCOMPARE(configPathValue->text(), QStringLiteral("-"));
-    QVERIFY(statusJsonView->toPlainText().contains(QStringLiteral("Connection refused")));
+    QCOMPARE(connectionValue.text(), QStringLiteral("Daemon unavailable"));
+    QCOMPARE(configPathValue.text(), QStringLiteral("-"));
+    QVERIFY(statusJsonView.toPlainText().contains(QStringLiteral("Connection refused")));
 }
 
 QTEST_MAIN(TrayStatusWindowTest)

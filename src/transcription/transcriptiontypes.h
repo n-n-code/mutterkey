@@ -16,6 +16,7 @@
  */
 enum class RuntimeErrorCode : std::uint8_t {
     None,
+    Cancelled,
     InvalidConfig,
     ModelNotFound,
     ModelLoadFailed,
