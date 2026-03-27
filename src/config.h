@@ -21,8 +21,8 @@
 QString defaultConfigPath();
 
 /**
- * @brief Returns the default Whisper model path used for fallback config values.
- * @return Default path to the expected local model file.
+ * @brief Returns the default model artifact path used for fallback config values.
+ * @return Default path to the expected local model artifact.
  */
 QString defaultModelPath();
 
@@ -57,10 +57,10 @@ struct AudioConfig {
 };
 
 /**
- * @brief Whisper backend configuration.
+ * @brief Transcription runtime configuration.
  */
 struct TranscriberConfig {
-    /// Filesystem path to the Whisper model file.
+    /// Filesystem path to a model package, manifest, or raw compatibility artifact.
     QString modelPath;
     /// Language code passed to whisper.cpp.
     QString language = QStringLiteral("en");

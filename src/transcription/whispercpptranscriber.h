@@ -1,6 +1,7 @@
 #pragma once
 
 #include "config.h"
+#include "transcription/modelpackage.h"
 #include "transcription/transcriptionengine.h"
 #include "transcription/transcriptiontypes.h"
 

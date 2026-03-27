@@ -32,6 +32,15 @@ mutterkey_add_qt_test(streamingtranscriptiontest
     ../src/transcription/transcriptioncompat.cpp
 )
 
+mutterkey_add_qt_test(modelpackagetest
+    modelpackagetest.cpp
+    ../src/transcription/modelcatalog.cpp
+    ../src/transcription/modelpackage.cpp
+    ../src/transcription/modelvalidator.cpp
+    ../src/transcription/rawwhisperimporter.cpp
+    ../src/transcription/rawwhisperprobe.cpp
+)
+
 mutterkey_add_qt_test(daemoncontrolprotocoltest
     daemoncontrolprotocoltest.cpp
     ../src/control/daemoncontrolprotocol.cpp
@@ -58,7 +67,11 @@ mutterkey_add_qt_test(transcriptionworkertest
 
 mutterkey_add_qt_test(whispercpptranscribertest
     whispercpptranscribertest.cpp
+    ../src/transcription/modelcatalog.cpp
     ../src/transcription/transcriptionengine.cpp
+    ../src/transcription/modelpackage.cpp
+    ../src/transcription/modelvalidator.cpp
+    ../src/transcription/rawwhisperprobe.cpp
     ../src/transcription/whispercpptranscriber.cpp
 )
 
@@ -84,9 +97,9 @@ add_test(NAME testcommentarycheck
 )
 
 if(TARGET clang-tidy)
-    add_dependencies(clang-tidy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen streamingtranscriptiontest_autogen daemoncontrolprotocoltest_autogen daemoncontroltypestest_autogen daemoncontrolclientservertest_autogen transcriptionworkertest_autogen whispercpptranscribertest_autogen platformlogicstest_autogen traystatuswindowtest_autogen)
+    add_dependencies(clang-tidy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen streamingtranscriptiontest_autogen modelpackagetest_autogen daemoncontrolprotocoltest_autogen daemoncontroltypestest_autogen daemoncontrolclientservertest_autogen transcriptionworkertest_autogen whispercpptranscribertest_autogen platformlogicstest_autogen traystatuswindowtest_autogen)
 endif()
 
 if(TARGET clazy)
-    add_dependencies(clazy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen streamingtranscriptiontest_autogen daemoncontrolprotocoltest_autogen daemoncontroltypestest_autogen daemoncontrolclientservertest_autogen transcriptionworkertest_autogen whispercpptranscribertest_autogen platformlogicstest_autogen traystatuswindowtest_autogen)
+    add_dependencies(clazy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen streamingtranscriptiontest_autogen modelpackagetest_autogen daemoncontrolprotocoltest_autogen daemoncontroltypestest_autogen daemoncontrolclientservertest_autogen transcriptionworkertest_autogen whispercpptranscribertest_autogen platformlogicstest_autogen traystatuswindowtest_autogen)
 endif()

@@ -84,6 +84,25 @@ bool shouldShowConfigHelp(const QStringList &arguments, int commandIndex)
     return false;
 }
 
+bool shouldShowModelHelp(const QStringList &arguments, int commandIndex)
+{
+    if (commandIndex < 0 || commandIndex >= arguments.size() || arguments.at(commandIndex) != QStringLiteral("model")) {
+        return false;
+    }
+
+    if (commandIndex == arguments.size() - 1) {
+        return true;
+    }
+
+    for (int index = commandIndex + 1; index < arguments.size(); ++index) {
+        if (isHelpArgument(arguments.at(index))) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 QString configHelpText()
 {
     QString helpText;
@@ -96,7 +115,7 @@ QString configHelpText()
     output << Qt::endl;
     output << "Config options:" << Qt::endl;
     output << "  --config <path>       Path to the JSON config file" << Qt::endl;
-    output << "  --model-path <path>   Set transcriber.model_path during `config init`" << Qt::endl;
+    output << "  --model-path <path>   Set transcriber.model_path to a package path, manifest, or raw compatibility artifact" << Qt::endl;
     output << "  --shortcut <sequence> Set shortcut.sequence during `config init`" << Qt::endl;
     output << "  --language <code|auto> Set transcriber.language during `config init`" << Qt::endl;
     output << "  --threads <count>     Set transcriber.threads during `config init`" << Qt::endl;
@@ -110,5 +129,18 @@ QString configHelpText()
     for (const QString &key : supportedConfigKeys()) {
         output << "  " << key << Qt::endl;
     }
+    return helpText;
+}
+
+QString modelHelpText()
+{
+    QString helpText;
+    QTextStream output(&helpText);
+    output << "Usage: mutterkey model <subcommand> [args]" << Qt::endl;
+    output << Qt::endl;
+    output << "Model subcommands:" << Qt::endl;
+    output << "  import <raw-whisper-bin> [--output <dir>] [--id <package-id>]" << Qt::endl;
+    output << "                      Import a raw whisper.cpp ggml model into a native Mutterkey package" << Qt::endl;
+    output << "  inspect <path>      Inspect a model package directory, model.json, or raw compatibility artifact" << Qt::endl;
     return helpText;
 }

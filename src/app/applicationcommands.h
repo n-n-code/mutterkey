@@ -46,3 +46,19 @@ int runOnce(QGuiApplication &app, const AppConfig &config, double seconds);
  * @return Process exit code.
  */
 int runDiagnose(QGuiApplication &app, const AppConfig &config, double seconds, bool invokeShortcut);
+
+/**
+ * @brief Imports a legacy raw Whisper model into a native Mutterkey package.
+ * @param sourcePath Source raw model file.
+ * @param outputPath Optional package destination path.
+ * @param packageIdOverride Optional package id override.
+ * @return Process exit code.
+ */
+int runModelImport(const QString &sourcePath, const QString &outputPath, const QString &packageIdOverride);
+
+/**
+ * @brief Inspects a model artifact and prints metadata as JSON.
+ * @param path Package directory, manifest path, or raw compatibility artifact.
+ * @return Process exit code.
+ */
+int runModelInspect(const QString &path);

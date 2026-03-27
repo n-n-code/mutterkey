@@ -20,6 +20,11 @@ enum class RuntimeErrorCode : std::uint8_t {
     Cancelled,
     InvalidConfig,
     ModelNotFound,
+    InvalidModelPackage,
+    UnsupportedModelPackageVersion,
+    ModelIntegrityFailed,
+    IncompatibleModelPackage,
+    ModelTooLarge,
     ModelLoadFailed,
     AudioNormalizationFailed,
     UnsupportedLanguage,
@@ -71,6 +76,56 @@ struct RuntimeDiagnostics {
     QString runtimeDescription;
     /// Loaded-model description when a model is available.
     QString loadedModelDescription;
+};
+
+/**
+ * @brief Product-owned immutable metadata about a validated model artifact.
+ */
+struct ModelMetadata {
+    /// Stable product-owned package identifier.
+    QString packageId;
+    /// Human-readable package/model name.
+    QString displayName;
+    /// Optional package version string.
+    QString packageVersion;
+    /// Runtime family this artifact belongs to.
+    QString runtimeFamily;
+    /// Source format imported or packaged by Mutterkey.
+    QString sourceFormat;
+    /// Backend-facing model format marker such as `ggml`.
+    QString modelFormat;
+    /// Model family or architecture string when known.
+    QString architecture;
+    /// Language profile such as `en` or `multilingual`.
+    QString languageProfile;
+    /// Quantization metadata when known.
+    QString quantization;
+    /// Tokenizer metadata when known.
+    QString tokenizer;
+    /// Raw-path compatibility marker for migration diagnostics.
+    bool legacyCompatibility = false;
+    /// Vocabulary size when known.
+    int vocabularySize = 0;
+    /// Audio context size when known.
+    int audioContext = 0;
+    /// Audio state size when known.
+    int audioState = 0;
+    /// Audio attention head count when known.
+    int audioHeadCount = 0;
+    /// Audio layer count when known.
+    int audioLayerCount = 0;
+    /// Text context size when known.
+    int textContext = 0;
+    /// Text state size when known.
+    int textState = 0;
+    /// Text attention head count when known.
+    int textHeadCount = 0;
+    /// Text layer count when known.
+    int textLayerCount = 0;
+    /// Mel filter count when known.
+    int melCount = 0;
+    /// Backend-specific format type value when known.
+    int formatType = 0;
 };
 
 /**
@@ -164,3 +219,4 @@ struct TranscriptionResult {
 Q_DECLARE_METATYPE(RuntimeErrorCode)
 Q_DECLARE_METATYPE(RuntimeError)
 Q_DECLARE_METATYPE(BackendCapabilities)
+Q_DECLARE_METATYPE(ModelMetadata)

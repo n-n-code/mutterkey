@@ -21,8 +21,10 @@ bash scripts/check-release-hygiene.sh
 - Review [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for accuracy.
 - Review [third_party/whisper.cpp.UPSTREAM.md](third_party/whisper.cpp.UPSTREAM.md)
   and make sure the recorded upstream version/ref is current.
-- Confirm no Whisper model binaries or other large third-party artifacts are
-  tracked in the repository.
+- Confirm no speech model binaries, native model packages, or other large
+  third-party artifacts are tracked in the repository source tree.
+- If the release is intended to ship a model, treat that as a release-bundle or
+  release-asset decision, not a Git-tracked source-tree decision.
 
 ## Build And Test
 
@@ -150,11 +152,58 @@ cmake --install "$BUILD_DIR" --prefix "$INSTALL_DIR"
   install rules ship the runtime libraries but intentionally clear vendored
   `PUBLIC_HEADER` metadata to avoid upstream header-install warnings.
 
+## Model Packaging For Releases
+
+- Decide explicitly whether the release ships:
+  - no model at all
+  - a separate downloadable model package
+  - a release bundle that includes a model package alongside the binaries
+- Keep model artifacts out of Git history even when the release ships one.
+  The repository source tree should stay free of raw Whisper `.bin` files and
+  native Mutterkey model packages.
+- If you need a model for the release, start from a raw whisper.cpp-compatible
+  `ggml` `.bin` file and import it into a native Mutterkey package:
+
+```bash
+MODEL_SRC="/path/to/ggml-base.en.bin"
+MODEL_OUT="$(mktemp -d /tmp/mutterkey-release-model-XXXXXX)/base-en"
+"$BUILD_DIR/mutterkey" model import "$MODEL_SRC" --output "$MODEL_OUT"
+```
+
+- Inspect the resulting package before shipping it:
+
+```bash
+"$BUILD_DIR/mutterkey" model inspect "$MODEL_OUT"
+```
+
+- Confirm the package contains at least:
+  - `model.json`
+  - `assets/model.bin`
+- Review the inspected metadata and make sure the release notes record:
+  - model family / size
+  - language profile
+  - source provenance
+  - any separate model license or usage terms
+- If the release bundle is meant to include a model, add the package directory
+  to the release artifact outside the Git source tree. Preferred locations are:
+  - a separate downloadable release asset such as `mutterkey-model-base-en.tar.zst`
+  - a bundled runtime tree under `share/mutterkey/models/<package-id>/`
+- If you include a model in an installable release bundle, validate the final
+  staged tree after copying the package in:
+  - the package directory is intact
+  - `mutterkey model inspect <bundled-package-path>` succeeds
+  - release notes and packaging docs tell users where `transcriber.model_path`
+    should point
+- Do not commit the raw `.bin` source file, the generated native package, or
+  any unpacked release-bundle copy back into the repository.
+
 ## Documentation And User Flow
 
 - Review [README.md](README.md) for consistency with current behavior.
 - Review `docs/mainpage.md` and `docs/Doxyfile.in` if the release touched
   repo-owned API docs or docs/CI wiring.
+- Confirm the docs describe native Mutterkey model packages as the canonical
+  artifact and raw Whisper `.bin` files as migration compatibility only.
 - Confirm the documented recommended path is still the `systemd --user` service.
 - Confirm [contrib/mutterkey.service](contrib/mutterkey.service) matches the
   recommended installed-binary setup.

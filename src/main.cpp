@@ -33,6 +33,11 @@ void writeConfigHelp()
     QTextStream(stdout) << configHelpText();
 }
 
+void writeModelHelp()
+{
+    QTextStream(stdout) << modelHelpText();
+}
+
 void configureCommandLineParser(QCommandLineParser *parser)
 {
     parser->setApplicationDescription(QStringLiteral("Push-to-talk local speech transcription for KDE Plasma"));
@@ -245,7 +250,7 @@ bool bootstrapConfig(const QString &configPath,
 
     if (promptForModelPath) {
         QString modelPath;
-        if (!promptForConfigValue(QStringLiteral("Whisper model path"),
+        if (!promptForConfigValue(QStringLiteral("Model artifact path"),
                                   config->transcriber.modelPath,
                                   true,
                                   modelPath,
@@ -305,7 +310,7 @@ int runConfigInit(const QString &configPath,
     } else {
         if (!hasModelPathOverride) {
             return exitWithError(QStringLiteral(
-                "Missing config file and no terminal is available. Re-run `mutterkey config init --model-path /path/to/model.bin` from a shell."));
+                "Missing config file and no terminal is available. Re-run `mutterkey config init --model-path /path/to/model` from a shell."));
         }
         if (!saveConfig(configPath, config, &errorMessage)) {
             return exitWithError(errorMessage);
@@ -355,7 +360,7 @@ int runConfigCommand(const QStringList &arguments)
                                             QStringLiteral("Override the configured log level"),
                                             QStringLiteral("level"));
     const QCommandLineOption modelPathOption(QStringList{QStringLiteral("model-path")},
-                                             QStringLiteral("Override the configured Whisper model path"),
+                                             QStringLiteral("Override the configured model artifact path"),
                                              QStringLiteral("path"));
     const QCommandLineOption shortcutOption(QStringList{QStringLiteral("shortcut")},
                                             QStringLiteral("Override the configured push-to-talk shortcut"),
@@ -384,7 +389,7 @@ int runConfigCommand(const QStringList &arguments)
     parser.addOption(noTranslateOption);
     parser.addOption(warmupOption);
     parser.addOption(noWarmupOption);
-    parser.addPositionalArgument(QStringLiteral("command"), QStringLiteral("daemon, once, diagnose, or config"));
+    parser.addPositionalArgument(QStringLiteral("command"), QStringLiteral("daemon, once, diagnose, config, or model"));
     parser.addPositionalArgument(QStringLiteral("extra"), QStringLiteral("Command-specific arguments"));
     parser.process(arguments);
 
@@ -426,6 +431,43 @@ int runConfigCommand(const QStringList &arguments)
     return exitWithError(QStringLiteral("Unknown config subcommand: %1").arg(subcommand));
 }
 
+int runModelCommand(const QStringList &arguments)
+{
+    QCommandLineParser parser;
+    configureCommandLineParser(&parser);
+
+    const QCommandLineOption outputOption(QStringList{QStringLiteral("output")},
+                                          QStringLiteral("Output package directory"),
+                                          QStringLiteral("path"));
+    const QCommandLineOption idOption(QStringList{QStringLiteral("id")},
+                                      QStringLiteral("Override the generated package id"),
+                                      QStringLiteral("package-id"));
+    parser.addOption(outputOption);
+    parser.addOption(idOption);
+    parser.addPositionalArgument(QStringLiteral("command"), QStringLiteral("model"));
+    parser.addPositionalArgument(QStringLiteral("subcommand"), QStringLiteral("import or inspect"));
+    parser.addPositionalArgument(QStringLiteral("path"), QStringLiteral("Model path or source artifact"));
+    parser.process(arguments);
+
+    const QStringList positional = parser.positionalArguments();
+    const QString subcommand = positional.value(1);
+    if (subcommand == QStringLiteral("import")) {
+        if (positional.size() < 3) {
+            return exitWithError(QStringLiteral("Usage: mutterkey model import <raw-whisper-bin> [--output <dir>] [--id <package-id>]"));
+        }
+        return runModelImport(positional.at(2), parser.value(outputOption), parser.value(idOption));
+    }
+
+    if (subcommand == QStringLiteral("inspect")) {
+        if (positional.size() < 3) {
+            return exitWithError(QStringLiteral("Usage: mutterkey model inspect <path>"));
+        }
+        return runModelInspect(positional.at(2));
+    }
+
+    return exitWithError(QStringLiteral("Unknown model subcommand: %1").arg(subcommand));
+}
+
 } // namespace
 
 int main(int argc, char *argv[])
@@ -436,8 +478,15 @@ int main(int argc, char *argv[])
         writeConfigHelp();
         return 0;
     }
+    if (shouldShowModelHelp(arguments, commandIndex)) {
+        writeModelHelp();
+        return 0;
+    }
     if (commandIndex >= 0 && commandIndex < arguments.size() && arguments.at(commandIndex) == QStringLiteral("config")) {
         return runConfigCommand(arguments);
+    }
+    if (commandIndex >= 0 && commandIndex < arguments.size() && arguments.at(commandIndex) == QStringLiteral("model")) {
+        return runModelCommand(arguments);
     }
 
     QGuiApplication app(argc, argv);
@@ -456,7 +505,7 @@ int main(int argc, char *argv[])
                                             QStringLiteral("Override the configured log level"),
                                             QStringLiteral("level"));
     const QCommandLineOption modelPathOption(QStringList{QStringLiteral("model-path")},
-                                             QStringLiteral("Override the configured Whisper model path"),
+                                             QStringLiteral("Override the configured model artifact path"),
                                              QStringLiteral("path"));
     const QCommandLineOption shortcutOption(QStringList{QStringLiteral("shortcut")},
                                             QStringLiteral("Override the configured push-to-talk shortcut"),
@@ -485,7 +534,7 @@ int main(int argc, char *argv[])
     parser.addOption(noTranslateOption);
     parser.addOption(warmupOption);
     parser.addOption(noWarmupOption);
-    parser.addPositionalArgument(QStringLiteral("command"), QStringLiteral("daemon, once, diagnose, or config"));
+    parser.addPositionalArgument(QStringLiteral("command"), QStringLiteral("daemon, once, diagnose, config, or model"));
     parser.addPositionalArgument(QStringLiteral("extra"), QStringLiteral("Command-specific arguments"));
     parser.process(app);
 

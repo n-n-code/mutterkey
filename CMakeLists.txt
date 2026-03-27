@@ -47,6 +47,16 @@ set(MUTTERKEY_CORE_SOURCES
     src/transcription/transcriptionengine.h
     src/transcription/audiochunker.cpp
     src/transcription/audiochunker.h
+    src/transcription/modelcatalog.cpp
+    src/transcription/modelcatalog.h
+    src/transcription/modelpackage.cpp
+    src/transcription/modelpackage.h
+    src/transcription/modelvalidator.cpp
+    src/transcription/modelvalidator.h
+    src/transcription/rawwhisperimporter.cpp
+    src/transcription/rawwhisperimporter.h
+    src/transcription/rawwhisperprobe.cpp
+    src/transcription/rawwhisperprobe.h
     src/transcription/transcriptassembler.cpp
     src/transcription/transcriptassembler.h
     src/transcription/transcriptioncompat.cpp

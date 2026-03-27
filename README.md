@@ -68,7 +68,7 @@ Build requirements:
 
 Runtime requirements:
 
-1. a local Whisper model file
+1. a local Mutterkey model package, or a raw Whisper `.bin` file for migration compatibility
 2. a config file at `~/.config/mutterkey/config.json` or a custom `--config` path
 
 Optional developer tooling:
@@ -81,9 +81,9 @@ Optional developer tooling:
 - `valgrind`
 - `libc6-dbg` on Debian-family systems so Valgrind Memcheck can start cleanly
 
-The repository vendors `whisper.cpp`, but it does not bundle Whisper model
-files. Any model file you download separately may be subject to its own license
-or usage terms.
+The repository vendors `whisper.cpp`, but it does not bundle speech model
+artifacts. Any model file you download separately may be subject to its own
+license or usage terms.
 
 If CMake fails before compilation starts, the most common cause is missing Qt 6
 development packages for `Core`, `Gui`, `Multimedia`, or KDE Frameworks
@@ -165,9 +165,30 @@ Notes:
 - `MUTTERKEY_ENABLE_WHISPER_BLAS=ON` improves CPU inference speed rather than enabling GPU execution
 - these options are forwarded to the vendored `whisper.cpp` / `ggml` build and install any resulting backend libraries alongside Mutterkey
 
-### 2. Put a Whisper model on disk
+### 2. Put a model on disk
 
-Example location:
+Preferred Phase 4 path:
+
+1. place a raw Whisper `.bin` file somewhere temporary
+2. import it into a native Mutterkey package:
+
+```bash
+~/.local/bin/mutterkey model import /path/to/ggml-base.en.bin
+```
+
+This creates a package directory under:
+
+```text
+~/.local/share/mutterkey/models/<package-id>/
+```
+
+You can inspect a package or a legacy raw file with:
+
+```bash
+~/.local/bin/mutterkey model inspect /path/to/ggml-base.en.bin
+```
+
+Legacy compatibility path:
 
 ```text
 ~/.local/share/mutterkey/models/ggml-base.en.bin
@@ -176,7 +197,7 @@ Example location:
 ### 3. Create the config file
 
 ```bash
-mutterkey config init --model-path ~/.local/share/mutterkey/models/ggml-base.en.bin
+mutterkey config init --model-path ~/.local/share/mutterkey/models/<package-id>
 ```
 
 `mutterkey config init` writes the Linux config file to:
@@ -213,7 +234,7 @@ Minimal example:
     "sequence": "F8"
   },
   "transcriber": {
-    "model_path": "/absolute/path/to/ggml-base.en.bin",
+    "model_path": "/absolute/path/to/mutterkey-model-package",
     "language": "en",
     "translate": false,
     "threads": 0,
@@ -228,6 +249,7 @@ Config notes:
 
 - `transcriber.threads: 0` means auto-detect based on the local machine
 - `transcriber.language` accepts a Whisper language code such as `en` or `fi`, or `auto` for language detection
+- `transcriber.model_path` may point to a native Mutterkey package directory, a `model.json` manifest, or a legacy raw Whisper `.bin` file
 - invalid numeric values fall back to safe defaults and log a warning
 - invalid `transcriber.language` values fall back to the default and log a warning
 - empty `shortcut.sequence` or `transcriber.model_path` values fall back to defaults and log a warning
@@ -306,7 +328,8 @@ installed setup looks like:
 Useful config commands:
 
 ```bash
-~/.local/bin/mutterkey config init --model-path ~/.local/share/mutterkey/models/ggml-base.en.bin
+~/.local/bin/mutterkey config init --model-path ~/.local/share/mutterkey/models/<package-id>
+~/.local/bin/mutterkey model inspect ~/.local/share/mutterkey/models/<package-id>
 ~/.local/bin/mutterkey config set shortcut.sequence Meta+F8
 ~/.local/bin/mutterkey config set transcriber.language fi
 ```
@@ -329,10 +352,9 @@ journalctl --user -u mutterkey.service -f
 
 Common failures:
 
-`Embedded Whisper model not found: ...`
+`Model artifact not found: ...`
 
-- the embedded backend is active
-- the configured model path does not exist
+- the configured package path, manifest path, or raw compatibility artifact does not exist
 - fix `transcriber.model_path`
 
 `Recorder returned no audio`
@@ -375,6 +397,11 @@ Repository layout:
 - `src/transcription/audiochunker.*`: fixed-size normalized streaming chunk generation
 - `src/transcription/transcriptassembler.*`: final transcript assembly from streaming events
 - `src/transcription/transcriptioncompat.*`: compatibility wrapper from one-shot recordings to the streaming runtime path
+- `src/transcription/modelpackage.*`: product-owned manifest and validated package value types
+- `src/transcription/modelvalidator.*`: package integrity and compatibility validation
+- `src/transcription/modelcatalog.*`: model artifact inspection and resolution
+- `src/transcription/rawwhisperprobe.*`: lightweight raw Whisper header inspection
+- `src/transcription/rawwhisperimporter.*`: migration path from raw Whisper files to native packages
 - `src/transcription/whispercpptranscriber.*`: embedded Whisper integration behind the app-owned runtime seam
 - `src/transcription/transcriptionworker.*`: worker object on a dedicated `QThread`
 - `src/transcription/transcriptiontypes.h`: runtime diagnostics, normalized-audio, chunk, event, and error value types

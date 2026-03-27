@@ -1,5 +1,7 @@
 #include "transcription/whispercpptranscriber.h"
 
+#include "transcription/modelcatalog.h"
+
 #include <algorithm>
 #include <atomic>
 #include <cstdint>
@@ -22,9 +24,9 @@ Q_LOGGING_CATEGORY(whisperCppLog, "mutterkey.transcriber.whispercpp")
 class WhisperCppModelHandle final : public TranscriptionModelHandle
 {
 public:
-    WhisperCppModelHandle(QString modelPath,
+    WhisperCppModelHandle(ValidatedModelPackage package,
                           std::unique_ptr<whisper_context, void (*)(whisper_context *)> context)
-        : m_modelPath(std::move(modelPath))
+        : m_package(std::move(package))
         , m_context(std::move(context))
     {
     }
@@ -36,7 +38,7 @@ public:
 
     [[nodiscard]] const QString &modelPath() const
     {
-        return m_modelPath;
+        return m_package.weightsPath;
     }
 
     [[nodiscard]] QString backendName() const override
@@ -44,13 +46,18 @@ public:
         return WhisperCppTranscriber::backendNameStatic();
     }
 
+    [[nodiscard]] ModelMetadata metadata() const override
+    {
+        return m_package.metadata();
+    }
+
     [[nodiscard]] QString modelDescription() const override
     {
-        return m_modelPath;
+        return m_package.description();
     }
 
 private:
-    QString m_modelPath;
+    ValidatedModelPackage m_package;
     std::unique_ptr<whisper_context, void (*)(whisper_context *)> m_context;
 };
 
@@ -162,17 +169,12 @@ bool shouldAbortDecode(void *userData)
 std::shared_ptr<const TranscriptionModelHandle>
 WhisperCppTranscriber::loadModelHandle(const TranscriberConfig &config, RuntimeError *error)
 {
-    // Resolve to an absolute path before initialization so logs and error messages match
-    // the exact model file whisper.cpp is attempting to load.
-    const QString modelPath = QFileInfo(config.modelPath).absoluteFilePath();
-    if (modelPath.isEmpty() || !QFileInfo::exists(modelPath)) {
-        if (error != nullptr) {
-            *error = makeRuntimeError(RuntimeErrorCode::ModelNotFound,
-                                      QStringLiteral("Embedded Whisper model not found: %1").arg(config.modelPath),
-                                      modelPath);
-        }
+    const std::optional<ValidatedModelPackage> package =
+        ModelCatalog::inspectPath(config.modelPath, QStringLiteral("whisper.cpp"), QStringLiteral("ggml"), error);
+    if (!package.has_value()) {
         return nullptr;
     }
+    const QString modelPath = package->weightsPath;
 
     const whisper_context_params contextParams = whisper_context_default_params();
     qCInfo(whisperCppLog).noquote() << "ggml runtime:" << describeRegisteredBackends();
@@ -188,7 +190,7 @@ WhisperCppTranscriber::loadModelHandle(const TranscriberConfig &config, RuntimeE
     }
 
     qCInfo(whisperCppLog) << "Loaded embedded Whisper model from" << modelPath;
-    return std::make_shared<WhisperCppModelHandle>(modelPath, std::move(context));
+    return std::make_shared<WhisperCppModelHandle>(*package, std::move(context));
 }
 
 std::unique_ptr<TranscriptionSession>
