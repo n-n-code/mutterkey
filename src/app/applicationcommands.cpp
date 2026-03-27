@@ -6,6 +6,7 @@
 #include "clipboardwriter.h"
 #include "control/daemoncontrolserver.h"
 #include "service.h"
+#include "transcription/transcriptioncompat.h"
 #include "transcription/transcriptionengine.h"
 #include "transcription/transcriptiontypes.h"
 
@@ -82,7 +83,9 @@ int runOnce(QGuiApplication &app, const AppConfig &config, double seconds)
         }
     }
 
-    QTimer::singleShot(0, &app, [&app, &recorder, transcriber = transcriber.get(), &clipboardWriter, seconds]() {
+    QTimer::singleShot(0,
+                       &app,
+                       [&app, &recorder, transcriber = transcriber.get(), &clipboardWriter, seconds, normalizer = RecordingNormalizer()]() {
         QString errorMessage;
         if (!recorder.start(&errorMessage)) {
             qCCritical(appLog) << "Failed to start one-shot recording:" << errorMessage;
@@ -91,7 +94,7 @@ int runOnce(QGuiApplication &app, const AppConfig &config, double seconds)
         }
 
         qCInfo(appLog) << "Recording for" << seconds << "seconds";
-        QTimer::singleShot(static_cast<int>(seconds * 1000), &app, [&app, &recorder, transcriber, &clipboardWriter]() {
+        QTimer::singleShot(static_cast<int>(seconds * 1000), &app, [&app, &recorder, transcriber, &clipboardWriter, normalizer]() {
             const Recording recording = recorder.stop();
             if (!recording.isValid()) {
                 qCCritical(appLog) << "Recorder returned no audio";
@@ -99,7 +102,7 @@ int runOnce(QGuiApplication &app, const AppConfig &config, double seconds)
                 return;
             }
 
-            const TranscriptionResult result = transcriber->transcribe(recording);
+            const TranscriptionResult result = transcribeRecordingViaStreaming(*transcriber, recording, normalizer);
             if (!result.success) {
                 qCCritical(appLog) << "One-shot transcription failed:" << result.error.message;
                 QGuiApplication::exit(1);

@@ -18,6 +18,16 @@ Current behavior:
 - copies the resulting text to the clipboard
 - expects you to paste the text yourself with `Ctrl+V`
 
+Current runtime shape:
+
+- `TranscriptionEngine` is the immutable runtime/provider boundary
+- `TranscriptionSession` is the mutable per-session decode boundary
+- internal audio flow is streaming-first through normalized chunks and transcript events
+- `BackendCapabilities` reports static backend support, while `RuntimeDiagnostics`
+  reports runtime/device/model inspection data
+- the current daemon and `once` user flows still collapse the streaming path back
+  into a final clipboard-friendly transcript
+
 Current direction:
 
 - KDE-first
@@ -362,9 +372,12 @@ Repository layout:
 - `src/audio/audiorecorder.*`: microphone capture
 - `src/audio/recording.h`: shared recorded-audio payload passed between subsystems
 - `src/audio/recordingnormalizer.*`: conversion to Whisper-ready mono `float32` at `16 kHz`
-- `src/transcription/whispercpptranscriber.*`: embedded Whisper integration
+- `src/transcription/audiochunker.*`: fixed-size normalized streaming chunk generation
+- `src/transcription/transcriptassembler.*`: final transcript assembly from streaming events
+- `src/transcription/transcriptioncompat.*`: compatibility wrapper from one-shot recordings to the streaming runtime path
+- `src/transcription/whispercpptranscriber.*`: embedded Whisper integration behind the app-owned runtime seam
 - `src/transcription/transcriptionworker.*`: worker object on a dedicated `QThread`
-- `src/transcription/transcriptiontypes.h`: normalized-audio and transcription result value types
+- `src/transcription/transcriptiontypes.h`: runtime diagnostics, normalized-audio, chunk, event, and error value types
 - `src/clipboardwriter.*`: clipboard writes with KDE-first fallback behavior
 - `src/config.*`: JSON config loading and defaults
 - `src/app/*`: shared CLI/runtime command helpers used by the main entrypoint
@@ -462,7 +475,7 @@ Notes:
   libraries without inheriting upstream header-install warnings
 - the `valgrind` target runs the repo-owned Memcheck lane used for release readiness
 - tests are small headless `Qt Test` cases
-- `config` and `recordingnormalizer` currently have the main unit-test coverage because they contain the most deterministic logic without KDE session or device dependencies
+- streaming runtime helpers and worker orchestration now also have deterministic headless coverage through fake backends
 - GitHub Actions CI runs the hygiene job on Ubuntu 24.04 and the configure/build/test job in a Debian Trixie container because the needed KF6 dev packages are not available on the stock Ubuntu 24.04 runner image
 - successful `main` branch CI runs publish `build/docs/doxygen/html` to GitHub Pages with the official Pages actions
 - GitHub Actions release checks run a separate Valgrind Memcheck lane on manual dispatch and `v*` tags so normal PR CI stays faster

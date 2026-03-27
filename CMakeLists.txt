@@ -45,6 +45,12 @@ set(MUTTERKEY_CORE_SOURCES
     src/transcription/transcriptiontypes.h
     src/transcription/transcriptionengine.cpp
     src/transcription/transcriptionengine.h
+    src/transcription/audiochunker.cpp
+    src/transcription/audiochunker.h
+    src/transcription/transcriptassembler.cpp
+    src/transcription/transcriptassembler.h
+    src/transcription/transcriptioncompat.cpp
+    src/transcription/transcriptioncompat.h
     src/transcription/transcriptionworker.cpp
     src/transcription/transcriptionworker.h
     src/transcription/whispercpptranscriber.cpp
@@ -87,7 +93,7 @@ target_include_directories(mutterkey-tray PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/sr
 target_link_libraries(mutterkey_core PUBLIC Qt6::Core Qt6::Gui Qt6::Multimedia KF6::GlobalAccel KF6::GuiAddons)
 target_link_libraries(mutterkey_control PUBLIC Qt6::Core Qt6::Network mutterkey_core)
 target_link_libraries(mutterkey_app PUBLIC Qt6::Core Qt6::Gui mutterkey_control)
-target_link_libraries(mutterkey PRIVATE mutterkey_app whisper)
+target_link_libraries(mutterkey PRIVATE mutterkey_app)
 target_link_libraries(mutterkey-tray PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets mutterkey_control)
 set_target_properties(mutterkey PROPERTIES
     BUILD_RPATH "$ORIGIN/../lib"
@@ -206,7 +212,7 @@ add_subdirectory(third_party/whisper.cpp EXCLUDE_FROM_ALL)
 # upstream public headers as part of its own package layout.
 set_target_properties(whisper ggml PROPERTIES PUBLIC_HEADER "")
 
-target_link_libraries(mutterkey_core PUBLIC whisper)
+target_link_libraries(mutterkey_core PRIVATE whisper)
 
 install(TARGETS mutterkey RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(TARGETS mutterkey-tray RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

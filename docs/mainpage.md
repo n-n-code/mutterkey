@@ -21,11 +21,16 @@ Current runtime shape:
 
 - `TranscriptionEngine` is the immutable runtime/provider boundary
 - `TranscriptionSession` is the mutable per-session decode boundary
-- `BackendCapabilities` reports engine-owned runtime metadata used for
-  diagnostics and orchestration
+- internal audio flow is streaming-first through normalized chunks and
+  transcript events
+- `BackendCapabilities` reports static backend support used for orchestration
+- `RuntimeDiagnostics` reports runtime/device/model inspection data separately
+  from static capabilities
 - `RuntimeError` and `RuntimeErrorCode` provide typed runtime failures
 - `TranscriptionWorker` hosts transcription on a dedicated `QThread` and
   creates live sessions lazily on that worker thread
+- the shipped daemon and `once` flows still use a compatibility wrapper that
+  assembles a final transcript from the streaming runtime path
 - config parsing under `src/config.*` stays product-shaped and permissive, while
   backend-specific support checks live in the runtime layer
 
@@ -33,8 +38,10 @@ Core API surface covered here:
 
 - `HotkeyManager` registers the global push-to-talk shortcut through KDE.
 - `AudioRecorder` captures microphone audio while the shortcut is held.
-- `RecordingNormalizer` converts captured audio to Whisper-ready mono `float32`
+- `RecordingNormalizer` converts captured audio to runtime-ready mono `float32`
   samples at `16 kHz`.
+- `AudioChunker` splits normalized audio into deterministic stream chunks.
+- `TranscriptAssembler` builds final transcript text from streaming events.
 - `TranscriptionEngine` and `TranscriptionSession` define the app-owned runtime
   seam.
 - `WhisperCppTranscriber` performs in-process transcription through vendored

@@ -17,11 +17,11 @@ class RecordingNormalizer final
 {
 public:
     /**
-     * @brief Converts a captured recording into Whisper input audio.
+     * @brief Converts a captured recording into runtime input audio.
      * @param recording Source recording and its original device format.
      * @param normalizedAudio Output location for normalized samples.
      * @param errorMessage Optional output for conversion failures.
      * @return `true` when normalization succeeded.
      */
-    bool normalizeForWhisper(const Recording &recording, NormalizedAudio *normalizedAudio, QString *errorMessage = nullptr) const;
+    bool normalizeForRuntime(const Recording &recording, NormalizedAudio *normalizedAudio, QString *errorMessage = nullptr) const;
 };

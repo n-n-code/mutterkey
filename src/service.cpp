@@ -80,11 +80,12 @@ QJsonObject MutterkeyService::diagnostics() const
     object.insert(QStringLiteral("transcriptions_completed"), m_transcriptionsCompleted);
     object.insert(QStringLiteral("transcriber_backend"),
                   m_transcriptionWorker != nullptr ? m_transcriptionWorker->backendName() : QStringLiteral("unconfigured"));
-    object.insert(QStringLiteral("transcriber_model"),
-                  m_transcriptionWorker != nullptr ? m_transcriptionWorker->loadedModelDescription() : QString());
+    const RuntimeDiagnostics runtimeDiagnostics =
+        m_transcriptionWorker != nullptr ? m_transcriptionWorker->runtimeDiagnostics() : m_transcriptionEngine->diagnostics();
+    object.insert(QStringLiteral("transcriber_model"), runtimeDiagnostics.loadedModelDescription);
+    object.insert(QStringLiteral("transcriber_runtime"), runtimeDiagnostics.runtimeDescription);
     const BackendCapabilities capabilities =
         m_transcriptionWorker != nullptr ? m_transcriptionWorker->capabilities() : m_transcriptionEngine->capabilities();
-    object.insert(QStringLiteral("transcriber_runtime"), capabilities.runtimeDescription);
     object.insert(QStringLiteral("transcriber_supports_translation"), capabilities.supportsTranslation);
     object.insert(QStringLiteral("transcriber_supports_auto_language"), capabilities.supportsAutoLanguage);
     return object;
@@ -168,7 +169,7 @@ void MutterkeyService::transcribeInBackground(Recording recording)
     // another owner of the PCM payload alive on the service thread.
     QMetaObject::invokeMethod(m_transcriptionWorker,
                               [worker = m_transcriptionWorker, recording = std::move(recording)]() mutable {
-                                  worker->transcribe(recording);
+                                  worker->transcribeRecordingCompat(recording);
                               },
                               Qt::QueuedConnection);
 }

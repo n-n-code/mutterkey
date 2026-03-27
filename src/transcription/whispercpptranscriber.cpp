@@ -2,11 +2,12 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstdint>
+#include <utility>
 #include <QFileInfo>
 #include <QLoggingCategory>
 #include <QStringList>
 #include <QThread>
-#include <utility>
 
 extern "C" {
 #include <ggml-backend.h>
@@ -121,6 +122,11 @@ RuntimeError makeCancelledError()
     return makeRuntimeError(RuntimeErrorCode::Cancelled, QStringLiteral("Embedded Whisper transcription was cancelled"));
 }
 
+TranscriptUpdate makeCancelledUpdate()
+{
+    return TranscriptUpdate{.events = {}, .error = makeCancelledError()};
+}
+
 bool isSupportedLanguageCode(const QString &language)
 {
     const QString normalizedLanguage = language.trimmed().toLower();
@@ -221,7 +227,6 @@ BackendCapabilities WhisperCppTranscriber::capabilitiesStatic()
 {
     BackendCapabilities capabilities;
     capabilities.backendName = backendNameStatic();
-    capabilities.runtimeDescription = describeRegisteredBackends();
     capabilities.supportsAutoLanguage = true;
     capabilities.supportsTranslation = true;
     capabilities.supportsWarmup = true;
@@ -235,6 +240,15 @@ BackendCapabilities WhisperCppTranscriber::capabilitiesStatic()
     return capabilities;
 }
 
+RuntimeDiagnostics WhisperCppTranscriber::diagnosticsStatic()
+{
+    return RuntimeDiagnostics{
+        .backendName = backendNameStatic(),
+        .runtimeDescription = describeRegisteredBackends(),
+        .loadedModelDescription = {},
+    };
+}
+
 QString WhisperCppTranscriber::backendName() const
 {
     return backendNameStatic();
@@ -245,33 +259,56 @@ bool WhisperCppTranscriber::warmup(RuntimeError *error)
     return ensureState(error);
 }
 
-TranscriptionResult WhisperCppTranscriber::transcribe(const Recording &recording)
+TranscriptUpdate WhisperCppTranscriber::pushAudioChunk(const AudioChunk &chunk)
 {
-    const QString requestedLanguage = m_config.language.trimmed().toLower();
-    if (!isSupportedLanguageCode(requestedLanguage)) {
-        return TranscriptionResult{.success = false, .text = {}, .error = makeUnsupportedLanguageError(requestedLanguage)};
+    if (!chunk.isValid()) {
+        return TranscriptUpdate{
+            .events = {},
+            .error = makeRuntimeError(RuntimeErrorCode::AudioNormalizationFailed,
+                                      QStringLiteral("Streaming audio chunk is empty")),
+        };
     }
 
-    RuntimeError runtimeError;
-    if (!ensureState(&runtimeError)) {
-        return TranscriptionResult{.success = false, .text = {}, .error = runtimeError};
+    if (chunk.sampleRate <= 0 || chunk.channels != 1) {
+        return TranscriptUpdate{
+            .events = {},
+            .error = makeRuntimeError(RuntimeErrorCode::AudioNormalizationFailed,
+                                      QStringLiteral("Streaming audio chunk format is invalid")),
+        };
     }
 
-    QString errorMessage;
-    NormalizedAudio normalizedAudio;
-    if (!m_normalizer.normalizeForWhisper(recording, &normalizedAudio, &errorMessage)) {
-        return TranscriptionResult{
-            .success = false,
-            .text = {},
-            .error = makeRuntimeError(RuntimeErrorCode::AudioNormalizationFailed, errorMessage),
+    if (chunk.sampleRate != 16000) {
+        return TranscriptUpdate{
+            .events = {},
+            .error = makeRuntimeError(RuntimeErrorCode::AudioNormalizationFailed,
+                                      QStringLiteral("Embedded Whisper requires 16 kHz normalized chunks")),
         };
     }
 
     qCInfo(whisperCppLog) << "Normalized recording to"
-                          << normalizedAudio.samples.size()
+                          << chunk.samples.size()
                           << "mono samples at"
-                          << normalizedAudio.sampleRate
+                          << chunk.sampleRate
                           << "Hz";
+    m_bufferedSamples.insert(m_bufferedSamples.end(), chunk.samples.begin(), chunk.samples.end());
+    return TranscriptUpdate{};
+}
+
+TranscriptUpdate WhisperCppTranscriber::finish()
+{
+    const QString requestedLanguage = m_config.language.trimmed().toLower();
+    if (!isSupportedLanguageCode(requestedLanguage)) {
+        return TranscriptUpdate{.events = {}, .error = makeUnsupportedLanguageError(requestedLanguage)};
+    }
+
+    RuntimeError runtimeError;
+    if (!ensureState(&runtimeError)) {
+        return TranscriptUpdate{.events = {}, .error = runtimeError};
+    }
+
+    if (m_bufferedSamples.empty()) {
+        return TranscriptUpdate{};
+    }
 
     // Keep the inference configuration close to the callsite so the runtime behavior is
     // obvious from the integration layer without reading whisper.cpp internals.
@@ -294,9 +331,8 @@ TranscriptionResult WhisperCppTranscriber::transcribe(const Recording &recording
 
     m_cancelRequested.store(false, std::memory_order_relaxed);
     if (m_model == nullptr || m_model->context() == nullptr) {
-        return TranscriptionResult{
-            .success = false,
-            .text = {},
+        return TranscriptUpdate{
+            .events = {},
             .error = makeRuntimeError(RuntimeErrorCode::InternalRuntimeError,
                                       QStringLiteral("Embedded Whisper model handle is not available")),
         };
@@ -305,44 +341,48 @@ TranscriptionResult WhisperCppTranscriber::transcribe(const Recording &recording
     const int result = whisper_full_with_state(m_model->context(),
                                                m_state.get(),
                                                params,
-                                               normalizedAudio.samples.data(),
-                                               static_cast<int>(normalizedAudio.samples.size()));
+                                               m_bufferedSamples.data(),
+                                               static_cast<int>(m_bufferedSamples.size()));
     if (result != 0) {
+        m_bufferedSamples.clear();
         if (m_cancelRequested.load(std::memory_order_relaxed)) {
-            return TranscriptionResult{.success = false, .text = {}, .error = makeCancelledError()};
+            return makeCancelledUpdate();
         }
-        return TranscriptionResult{
-            .success = false,
-            .text = {},
+        return TranscriptUpdate{
+            .events = {},
             .error = makeRuntimeError(RuntimeErrorCode::DecodeFailed,
                                       QStringLiteral("Embedded Whisper transcription failed with code %1").arg(result)),
         };
     }
 
-    // whisper.cpp returns text in segment chunks; join non-empty segments into the single
-    // clipboard-friendly transcript expected by the rest of the app.
-    QString transcript;
+    TranscriptUpdate update;
     const int segmentCount = whisper_full_n_segments_from_state(m_state.get());
+    update.events.reserve(static_cast<std::size_t>(segmentCount));
     for (int index = 0; index < segmentCount; ++index) {
         const char *segment = whisper_full_get_segment_text_from_state(m_state.get(), index);
         const QString text = QString::fromUtf8(segment).trimmed();
         if (text.isEmpty()) {
             continue;
         }
-        if (!transcript.isEmpty()) {
-            transcript += QLatin1Char(' ');
-        }
-        transcript += text;
+        update.events.push_back(TranscriptEvent{
+            .kind = TranscriptEventKind::Final,
+            .text = text,
+            .startMs = whisper_full_get_segment_t0_from_state(m_state.get(), index) * 10,
+            .endMs = whisper_full_get_segment_t1_from_state(m_state.get(), index) * 10,
+        });
     }
 
-    qCInfo(whisperCppLog) << "Whisper transcript length:" << transcript.trimmed().size();
+    m_bufferedSamples.clear();
+    qCInfo(whisperCppLog) << "Whisper final segment count:" << update.events.size();
 
-    return TranscriptionResult{.success = true, .text = transcript.trimmed(), .error = {}};
+    return update;
 }
 
-void WhisperCppTranscriber::cancel()
+TranscriptUpdate WhisperCppTranscriber::cancel()
 {
     m_cancelRequested.store(true, std::memory_order_relaxed);
+    m_bufferedSamples.clear();
+    return makeCancelledUpdate();
 }
 
 bool WhisperCppTranscriber::ensureState(RuntimeError *error)
@@ -371,4 +411,46 @@ bool WhisperCppTranscriber::ensureState(RuntimeError *error)
 
     m_cancelRequested.store(false, std::memory_order_relaxed);
     return true;
+}
+
+namespace {
+
+class WhisperCppTranscriptionEngine final : public TranscriptionEngine
+{
+public:
+    explicit WhisperCppTranscriptionEngine(TranscriberConfig config)
+        : m_config(std::move(config))
+    {
+    }
+
+    [[nodiscard]] BackendCapabilities capabilities() const override
+    {
+        return WhisperCppTranscriber::capabilitiesStatic();
+    }
+
+    [[nodiscard]] RuntimeDiagnostics diagnostics() const override
+    {
+        return WhisperCppTranscriber::diagnosticsStatic();
+    }
+
+    [[nodiscard]] std::shared_ptr<const TranscriptionModelHandle> loadModel(RuntimeError *error) const override
+    {
+        return WhisperCppTranscriber::loadModelHandle(m_config, error);
+    }
+
+    [[nodiscard]] std::unique_ptr<TranscriptionSession>
+    createSession(std::shared_ptr<const TranscriptionModelHandle> model) const override
+    {
+        return WhisperCppTranscriber::createSession(m_config, std::move(model));
+    }
+
+private:
+    TranscriberConfig m_config;
+};
+
+} // namespace
+
+std::shared_ptr<const TranscriptionEngine> createWhisperCppTranscriptionEngine(const TranscriberConfig &config)
+{
+    return std::make_shared<WhisperCppTranscriptionEngine>(config);
 }

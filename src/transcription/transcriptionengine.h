@@ -72,11 +72,17 @@ public:
     virtual bool warmup(RuntimeError *error = nullptr) = 0;
 
     /**
-     * @brief Transcribes a single captured recording.
-     * @param recording Captured audio payload to normalize and transcribe.
-     * @return Normalized transcription result for the provided recording.
+     * @brief Ingests one normalized audio chunk into the live session.
+     * @param chunk Product-owned normalized audio chunk.
+     * @return Any transcript events emitted while ingesting the chunk.
      */
-    [[nodiscard]] virtual TranscriptionResult transcribe(const Recording &recording) = 0;
+    [[nodiscard]] virtual TranscriptUpdate pushAudioChunk(const AudioChunk &chunk) = 0;
+
+    /**
+     * @brief Flushes the current utterance and emits any final transcript events.
+     * @return Final transcript events or a structured runtime failure.
+     */
+    [[nodiscard]] virtual TranscriptUpdate finish() = 0;
 
     /**
      * @brief Requests cooperative cancellation of any active decode.
@@ -84,7 +90,7 @@ public:
      * Implementations should stop in-flight backend work best-effort without
      * using thread interruption.
      */
-    virtual void cancel() = 0;
+    [[nodiscard]] virtual TranscriptUpdate cancel() = 0;
 
 protected:
     TranscriptionSession() = default;
@@ -110,6 +116,12 @@ public:
      * @return App-owned capability snapshot suitable for diagnostics.
      */
     [[nodiscard]] virtual BackendCapabilities capabilities() const = 0;
+
+    /**
+     * @brief Returns runtime inspection data for this engine instance.
+     * @return App-owned runtime diagnostics separate from static capabilities.
+     */
+    [[nodiscard]] virtual RuntimeDiagnostics diagnostics() const = 0;
 
     /**
      * @brief Loads an immutable validated model handle for this engine.

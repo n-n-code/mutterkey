@@ -24,6 +24,14 @@ mutterkey_add_qt_test(recordingnormalizertest
     ../src/audio/recordingnormalizer.cpp
 )
 
+mutterkey_add_qt_test(streamingtranscriptiontest
+    streamingtranscriptiontest.cpp
+    ../src/audio/recordingnormalizer.cpp
+    ../src/transcription/audiochunker.cpp
+    ../src/transcription/transcriptassembler.cpp
+    ../src/transcription/transcriptioncompat.cpp
+)
+
 mutterkey_add_qt_test(daemoncontrolprotocoltest
     daemoncontrolprotocoltest.cpp
     ../src/control/daemoncontrolprotocol.cpp
@@ -42,8 +50,15 @@ mutterkey_add_qt_test(daemoncontrolclientservertest
 mutterkey_add_qt_test(transcriptionworkertest
     transcriptionworkertest.cpp
     ../src/audio/recordingnormalizer.cpp
-    ../src/transcription/transcriptionengine.cpp
+    ../src/transcription/audiochunker.cpp
+    ../src/transcription/transcriptassembler.cpp
+    ../src/transcription/transcriptioncompat.cpp
     ../src/transcription/transcriptionworker.cpp
+)
+
+mutterkey_add_qt_test(whispercpptranscribertest
+    whispercpptranscribertest.cpp
+    ../src/transcription/transcriptionengine.cpp
     ../src/transcription/whispercpptranscriber.cpp
 )
 
@@ -56,17 +71,13 @@ mutterkey_add_qt_test(traystatuswindowtest
     ../src/tray/traystatuswindow.cpp
 )
 
-target_link_libraries(configtest PRIVATE whisper)
-target_link_libraries(commanddispatchtest PRIVATE whisper)
-target_link_libraries(daemoncontroltypestest PRIVATE whisper)
 target_link_libraries(daemoncontrolclientservertest PRIVATE mutterkey_control)
-target_link_libraries(transcriptionworkertest PRIVATE whisper)
-target_link_libraries(traystatuswindowtest PRIVATE whisper)
+target_link_libraries(whispercpptranscribertest PRIVATE whisper)
 
 if(TARGET clang-tidy)
-    add_dependencies(clang-tidy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen daemoncontrolprotocoltest_autogen daemoncontroltypestest_autogen daemoncontrolclientservertest_autogen transcriptionworkertest_autogen traystatuswindowtest_autogen)
+    add_dependencies(clang-tidy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen streamingtranscriptiontest_autogen daemoncontrolprotocoltest_autogen daemoncontroltypestest_autogen daemoncontrolclientservertest_autogen transcriptionworkertest_autogen whispercpptranscribertest_autogen traystatuswindowtest_autogen)
 endif()
 
 if(TARGET clazy)
-    add_dependencies(clazy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen daemoncontrolprotocoltest_autogen daemoncontroltypestest_autogen daemoncontrolclientservertest_autogen transcriptionworkertest_autogen traystatuswindowtest_autogen)
+    add_dependencies(clazy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen streamingtranscriptiontest_autogen daemoncontrolprotocoltest_autogen daemoncontroltypestest_autogen daemoncontrolclientservertest_autogen transcriptionworkertest_autogen whispercpptranscribertest_autogen traystatuswindowtest_autogen)
 endif()
