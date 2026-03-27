@@ -12,7 +12,37 @@ namespace {
 
 Q_LOGGING_CATEGORY(audioLog, "mutterkey.audio")
 
+QAudioFormat requestedRecordingFormat(const AudioConfig &config)
+{
+    QAudioFormat requested;
+    requested.setSampleRate(config.sampleRate);
+    requested.setChannelCount(config.channels);
+    requested.setSampleFormat(QAudioFormat::Int16);
+    return requested;
+}
+
 } // namespace
+
+QAudioFormat resolveRecordingFormatForConfig(const AudioConfig &config,
+                                             const QAudioFormat &preferredFormat,
+                                             bool requestedFormatSupported,
+                                             QString *errorMessage)
+{
+    const QAudioFormat requested = requestedRecordingFormat(config);
+
+    if (requestedFormatSupported) {
+        return requested;
+    }
+
+    if (preferredFormat.sampleFormat() != QAudioFormat::Int16) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("The selected audio device does not support 16-bit PCM capture");
+        }
+        return {};
+    }
+
+    return preferredFormat;
+}
 
 AudioBufferDevice::AudioBufferDevice(QObject *parent)
     : QIODevice(parent)
@@ -144,23 +174,17 @@ QAudioDevice AudioRecorder::resolveDevice() const
 
 QAudioFormat AudioRecorder::resolveFormat(const QAudioDevice &device, QString *errorMessage) const
 {
-    QAudioFormat requested;
-    requested.setSampleRate(m_config.sampleRate);
-    requested.setChannelCount(m_config.channels);
-    requested.setSampleFormat(QAudioFormat::Int16);
-
-    if (device.isFormatSupported(requested)) {
-        return requested;
-    }
-
+    const QAudioFormat requested = requestedRecordingFormat(m_config);
+    const bool requestedSupported = device.isFormatSupported(requested);
     const QAudioFormat preferred = device.preferredFormat();
-    if (preferred.sampleFormat() != QAudioFormat::Int16) {
-        if (errorMessage != nullptr) {
-            *errorMessage = QStringLiteral("The selected audio device does not support 16-bit PCM capture");
-        }
+    const QAudioFormat format =
+        resolveRecordingFormatForConfig(m_config, preferred, requestedSupported, errorMessage);
+    if (!format.isValid()) {
         return {};
     }
 
-    qCWarning(audioLog) << "Requested audio format is unsupported, falling back to preferred format";
-    return preferred;
+    if (!requestedSupported) {
+        qCWarning(audioLog) << "Requested audio format is unsupported, falling back to preferred format";
+    }
+    return format;
 }

@@ -2,11 +2,33 @@
 
 #include "config.h"
 
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QKeySequence>
 #include <QObject>
 
 class QAction;
+
+/**
+ * @brief Converts an assigned key sequence into the diagnostic JSON payload shape.
+ * @param sequence Assigned sequence to serialize.
+ * @return JSON array containing portable-text segments.
+ */
+[[nodiscard]] QJsonArray keySequenceToDiagnosticJson(const QKeySequence &sequence);
+
+/**
+ * @brief Formats a key sequence list as portable-text diagnostics.
+ * @param sequences Assigned sequences reported by KDE.
+ * @return Human-readable joined portable-text representation.
+ */
+[[nodiscard]] QString keySequenceListToPortableText(const QList<QKeySequence> &sequences);
+
+/**
+ * @brief Parses a configured shortcut string into a Qt key sequence.
+ * @param sequenceText Configured shortcut text.
+ * @return Parsed sequence, or an empty sequence when parsing fails.
+ */
+[[nodiscard]] QKeySequence parseConfiguredKeySequence(const QString &sequenceText);
 
 /**
  * @file

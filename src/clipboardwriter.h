@@ -7,6 +7,22 @@
 class KSystemClipboard;
 
 /**
+ * @brief Reports the clipboard backend name from backend availability flags.
+ * @param hasSystemClipboard Whether KDE system clipboard support is available.
+ * @param hasQtClipboard Whether a Qt clipboard instance is available.
+ * @return Human-readable backend identifier for diagnostics.
+ */
+[[nodiscard]] QString clipboardBackendName(bool hasSystemClipboard, bool hasQtClipboard);
+
+/**
+ * @brief Reports whether a clipboard round-trip returned the requested text.
+ * @param requestedText Text the application attempted to write.
+ * @param actualText Text read back from the clipboard backend.
+ * @return `true` when the backend readback matches the requested text exactly.
+ */
+[[nodiscard]] bool clipboardRoundTripSucceeded(const QString &requestedText, const QString &actualText);
+
+/**
  * @file
  * @brief Clipboard integration with KDE-first and Qt fallback behavior.
  */

@@ -18,6 +18,11 @@ private slots:
 
 void WhisperCppTranscriberTest::whisperEngineSurfacesMissingModelAtLoadTime()
 {
+    // WHAT: Verify that the Whisper engine reports a missing model file at model-load time.
+    // HOW: Create the real engine with a definitely missing model path, try to load the
+    // model, and inspect the returned structured runtime error.
+    // WHY: Model-path problems are a common setup failure, so the engine must reject them
+    // before session creation with a precise, user-visible error category.
     TranscriberConfig config;
     config.modelPath = QStringLiteral("/tmp/definitely-missing-mutterkey-model.bin");
 
@@ -32,6 +37,11 @@ void WhisperCppTranscriberTest::whisperEngineSurfacesMissingModelAtLoadTime()
 
 void WhisperCppTranscriberTest::whisperRuntimeRejectsUnsupportedLanguage()
 {
+    // WHAT: Verify that the Whisper runtime rejects unsupported configured language values.
+    // HOW: Construct the real transcriber with an unsupported language code and confirm that
+    // finish returns the expected unsupported-language runtime error.
+    // WHY: Backend-specific validation belongs at the runtime boundary, and callers need a
+    // stable error instead of silent fallback when the language request is invalid.
     TranscriberConfig config;
     config.modelPath = QStringLiteral("/tmp/unused.bin");
     config.language = QStringLiteral("pirate");

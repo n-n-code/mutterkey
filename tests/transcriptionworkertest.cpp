@@ -236,6 +236,9 @@ private slots:
     void emitsFailureSignalForFailedTranscription();
     void surfacesWarmupFailure();
     void lazilyCreatesSessionFromInjectedEngine();
+    void runtimeDiagnosticsIncludeLoadedModelDescriptionAfterFirstUse();
+    void warmupFailureDiscardsSessionAndRecreatesItWithoutReloadingModel();
+    void nonTerminalFailureKeepsReusableSession();
     void recreatesSessionAfterTerminalFailureWithoutReloadingModel();
 };
 
@@ -248,6 +251,12 @@ void TranscriptionWorkerTest::initTestCase()
 
 void TranscriptionWorkerTest::reportsInjectedBackendName()
 {
+    // WHAT: Verify that a worker built from an injected live session exposes that backend
+    // identity without requiring an engine.
+    // HOW: Construct the worker with a fake session and inspect the reported backend name
+    // and runtime-diagnostics payload.
+    // WHY: Worker diagnostics are used before transcription begins, so they must stay useful
+    // even in narrow tests and injected-session runtime paths.
     auto session = std::make_unique<FakeTranscriptionSession>(FakeSessionScript{});
     const TranscriptionWorker worker(std::move(session));
 
@@ -257,6 +266,11 @@ void TranscriptionWorkerTest::reportsInjectedBackendName()
 
 void TranscriptionWorkerTest::emitsReadySignalForSuccessfulTranscription()
 {
+    // WHAT: Verify that a successful transcription emits the ready signal with final text.
+    // HOW: Use a fake session that produces a partial update during streaming and a final
+    // event during finish, then assert that only the ready signal fires.
+    // WHY: This is the worker's main success contract for the service and UI orchestration
+    // layers, so the final transcript must emerge on the expected signal.
     auto session = std::make_unique<FakeTranscriptionSession>(FakeSessionScript{
         .pushUpdates = {
             TranscriptUpdate{
@@ -289,6 +303,12 @@ void TranscriptionWorkerTest::emitsReadySignalForSuccessfulTranscription()
 
 void TranscriptionWorkerTest::emitsFailureSignalForFailedTranscription()
 {
+    // WHAT: Verify that a failed transcription emits the failure signal with the runtime
+    // error returned by the backend session.
+    // HOW: Use a fake session whose finish step returns a decode failure and confirm that no
+    // ready signal is emitted and the failure payload is preserved.
+    // WHY: Runtime orchestration depends on stable structured errors to distinguish backend
+    // failures from successful empty or partial transcript paths.
     auto session = std::make_unique<FakeTranscriptionSession>(FakeSessionScript{
         .pushUpdates = {},
         .finishUpdate = TranscriptUpdate{
@@ -315,6 +335,11 @@ void TranscriptionWorkerTest::emitsFailureSignalForFailedTranscription()
 
 void TranscriptionWorkerTest::surfacesWarmupFailure()
 {
+    // WHAT: Verify that worker warmup surfaces a backend warmup failure.
+    // HOW: Inject a fake session whose warmup returns a model-load error and check that the
+    // worker returns false with the same structured error.
+    // WHY: Warmup is the preflight contract for daemon startup and diagnostics, so failures
+    // must stay explicit before any recording is attempted.
     auto session = std::make_unique<FakeTranscriptionSession>(FakeSessionScript{
         .pushUpdates = {},
         .finishUpdate = {},
@@ -333,6 +358,12 @@ void TranscriptionWorkerTest::surfacesWarmupFailure()
 
 void TranscriptionWorkerTest::lazilyCreatesSessionFromInjectedEngine()
 {
+    // WHAT: Verify that an engine-backed worker delays model loading and session creation
+    // until transcription is actually requested.
+    // HOW: Construct the worker with a fake engine, inspect the zero-call state, run one
+    // transcription, and then check the engine interaction counts.
+    // WHY: Lazy session creation keeps startup light and avoids creating mutable backend
+    // state before the worker actually needs it on the runtime path.
     const std::shared_ptr<FakeTranscriptionEngine> engine = std::make_shared<FakeTranscriptionEngine>(
         FakeSessionScript{
             .pushUpdates = {},
@@ -361,8 +392,114 @@ void TranscriptionWorkerTest::lazilyCreatesSessionFromInjectedEngine()
     QCOMPARE(readySpy.at(0).at(0).toString(), QStringLiteral("engine path"));
 }
 
+void TranscriptionWorkerTest::runtimeDiagnosticsIncludeLoadedModelDescriptionAfterFirstUse()
+{
+    // WHAT: Verify that worker runtime diagnostics include the loaded model description after
+    // the engine path has created a model-backed session.
+    // HOW: Read diagnostics before and after the first successful transcription and confirm
+    // that the loaded-model description appears only after model loading.
+    // WHY: Operators rely on diagnostics to confirm which model is active, so the worker
+    // must surface that information once the runtime has actually loaded it.
+    const std::shared_ptr<FakeTranscriptionEngine> engine = std::make_shared<FakeTranscriptionEngine>(
+        FakeSessionScript{
+            .pushUpdates = {},
+            .finishUpdate = TranscriptUpdate{
+                .events = {TranscriptEvent{
+                    .kind = TranscriptEventKind::Final,
+                    .text = QStringLiteral("engine path"),
+                }},
+                .error = {},
+            },
+            .warmupError = {},
+        });
+    TranscriptionWorker worker(engine);
+
+    QVERIFY(worker.runtimeDiagnostics().loadedModelDescription.isEmpty());
+
+    worker.transcribeRecordingCompat(validRecording());
+
+    QCOMPARE(worker.runtimeDiagnostics().loadedModelDescription, QStringLiteral("fake-model"));
+}
+
+void TranscriptionWorkerTest::warmupFailureDiscardsSessionAndRecreatesItWithoutReloadingModel()
+{
+    // WHAT: Verify that a terminal warmup failure discards the live session but keeps the
+    // already loaded model for the next session creation attempt.
+    // HOW: Warm up through an engine whose first session fails with a model-load error and
+    // whose second session succeeds, then compare model-load and session-creation counts.
+    // WHY: Recovery after a terminal session failure should be cheap and deterministic, not
+    // force an unnecessary model reload or leave a poisoned session alive.
+    const std::shared_ptr<FakeTranscriptionEngine> engine = std::make_shared<FakeTranscriptionEngine>(
+        std::vector<FakeSessionScript>{
+            FakeSessionScript{
+                .pushUpdates = {},
+                .finishUpdate = {},
+                .warmupError = RuntimeError{
+                    .code = RuntimeErrorCode::ModelLoadFailed,
+                    .message = QStringLiteral("model unavailable"),
+                },
+            },
+            FakeSessionScript{
+                .pushUpdates = {},
+                .finishUpdate = {},
+                .warmupError = {},
+            },
+        });
+    TranscriptionWorker worker(engine);
+
+    RuntimeError error;
+    QVERIFY(!worker.warmup(&error));
+    QCOMPARE(error.code, RuntimeErrorCode::ModelLoadFailed);
+    QVERIFY(worker.warmup(&error));
+
+    QCOMPARE(engine->loadModelCalls(), 1);
+    QCOMPARE(engine->createSessionCalls(), 2);
+}
+
+void TranscriptionWorkerTest::nonTerminalFailureKeepsReusableSession()
+{
+    // WHAT: Verify that a non-terminal transcription failure keeps the current session alive
+    // for later reuse.
+    // HOW: Use an engine-backed worker, trigger an audio-normalization failure with an empty
+    // recording, then run a valid transcription and confirm the same session was reused.
+    // WHY: Input-side failures should not force backend-session recreation, because that
+    // would add unnecessary work and make recovery less predictable.
+    const std::shared_ptr<FakeTranscriptionEngine> engine = std::make_shared<FakeTranscriptionEngine>(
+        FakeSessionScript{
+            .pushUpdates = {},
+            .finishUpdate = TranscriptUpdate{
+                .events = {TranscriptEvent{
+                    .kind = TranscriptEventKind::Final,
+                    .text = QStringLiteral("reused"),
+                }},
+                .error = {},
+            },
+            .warmupError = {},
+        });
+    TranscriptionWorker worker(engine);
+    const QSignalSpy readySpy(&worker, &TranscriptionWorker::transcriptionReady);
+    const QSignalSpy failedSpy(&worker, &TranscriptionWorker::transcriptionFailed);
+
+    worker.transcribeRecordingCompat(Recording{});
+    worker.transcribeRecordingCompat(validRecording());
+
+    QCOMPARE(engine->loadModelCalls(), 1);
+    QCOMPARE(engine->createSessionCalls(), 1);
+    QCOMPARE(failedSpy.count(), 1);
+    QCOMPARE(readySpy.count(), 1);
+    QCOMPARE(readySpy.at(0).at(0).toString(), QStringLiteral("reused"));
+    const auto error = failedSpy.at(0).at(0).value<RuntimeError>();
+    QCOMPARE(error.code, RuntimeErrorCode::AudioNormalizationFailed);
+}
+
 void TranscriptionWorkerTest::recreatesSessionAfterTerminalFailureWithoutReloadingModel()
 {
+    // WHAT: Verify that a terminal decode failure causes the worker to recreate the session
+    // while reusing the already loaded model.
+    // HOW: Run two transcriptions through an engine whose first session fails at finish and
+    // whose second session succeeds, then inspect the engine interaction counts.
+    // WHY: This is the worker's recovery path after a poisoned decode session, and it must
+    // restore service operation without paying the cost of a second model load.
     const std::shared_ptr<FakeTranscriptionEngine> engine = std::make_shared<FakeTranscriptionEngine>(
         std::vector<FakeSessionScript>{
             FakeSessionScript{
