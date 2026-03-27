@@ -12,6 +12,7 @@ private slots:
     void parseStatusSnapshot();
     void parseConfigSnapshot();
     void rejectMalformedStatusSnapshot();
+    void rejectMalformedConfigSnapshot();
 };
 
 } // namespace
@@ -69,6 +70,19 @@ void DaemonControlTypesTest::rejectMalformedStatusSnapshot()
     QString errorMessage;
     QVERIFY(!parseDaemonStatusSnapshot(QJsonObject{{QStringLiteral("config_path"), QStringLiteral("/tmp/x")}}, &parsed, &errorMessage));
     QVERIFY(errorMessage.contains(QStringLiteral("Malformed daemon status payload")));
+}
+
+void DaemonControlTypesTest::rejectMalformedConfigSnapshot()
+{
+    // WHAT: Verify that malformed config payloads are rejected.
+    // HOW: Attempt to parse a JSON object that does not contain the required typed config
+    // snapshot fields and confirm that parsing fails with a malformed-payload error.
+    // WHY: Remote config inspection should reject broken control-plane payloads rather than
+    // silently inventing defaults that hide daemon-side or transport bugs.
+    DaemonConfigSnapshot parsed;
+    QString errorMessage;
+    QVERIFY(!parseDaemonConfigSnapshot(QJsonObject{{QStringLiteral("config_path"), QStringLiteral("/tmp/x")}}, &parsed, &errorMessage));
+    QVERIFY(errorMessage.contains(QStringLiteral("Malformed daemon config payload")));
 }
 
 QTEST_APPLESS_MAIN(DaemonControlTypesTest)

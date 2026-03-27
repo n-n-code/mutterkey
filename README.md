@@ -437,7 +437,7 @@ Valgrind and sanitizers have different roles:
 
 - use `MUTTERKEY_ENABLE_ASAN` / `MUTTERKEY_ENABLE_UBSAN` for fast developer iteration and CI-friendly memory or UB checks
 - use `bash scripts/run-valgrind.sh "$BUILD_DIR"` or the `valgrind` target as the slower release-readiness gate
-- the default Valgrind lane stays deterministic and headless: `configtest`, `recordingnormalizertest`, and `mutterkey --help`
+- the default Valgrind lane stays deterministic and headless: it runs the pure/configuration/control/runtime helper tests plus `mutterkey --help`, and still avoids microphone, clipboard-heavy, tray, or KDE hotkey integration paths
 - the default Valgrind lane intentionally does not run live microphone capture, clipboard-heavy flows, or KDE hotkey/service integration
 
 Notes for contributors:
@@ -445,7 +445,7 @@ Notes for contributors:
 - prefer an out-of-tree build so the repository stays clean
 - keep changes targeted to repo-owned code in `src/`, `tests/`, and top-level project files
 - avoid editing `third_party/whisper.cpp` unless the task is specifically about the vendored dependency
-- run `bash scripts/check-release-hygiene.sh` when changing publication-facing files such as this README, licenses, `contrib/`, or CI
+- run `bash scripts/check-release-hygiene.sh` when changing publication-facing files such as this README, licenses, `contrib/`, CI, or test-commentary tooling; it also enforces `WHAT/HOW/WHY` coverage in repo-owned test cases
 
 Release hygiene:
 

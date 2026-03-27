@@ -13,7 +13,27 @@ namespace {
 
 Q_LOGGING_CATEGORY(hotkeyLog, "mutterkey.hotkey")
 
-QJsonArray sequenceToJson(const QKeySequence &sequence)
+QString describeConflicts(const QKeySequence &requestedSequence)
+{
+    const QList<KGlobalShortcutInfo> conflicts =
+        KGlobalAccel::globalShortcutsByKey(requestedSequence, KGlobalAccel::Equal);
+    if (conflicts.isEmpty()) {
+        return {};
+    }
+
+    QStringList descriptions;
+    descriptions.reserve(conflicts.size());
+    for (const KGlobalShortcutInfo &conflict : conflicts) {
+        descriptions.append(QStringLiteral("%1/%2")
+                                .arg(conflict.componentUniqueName(), conflict.uniqueName()));
+    }
+    descriptions.removeDuplicates();
+    return descriptions.join(QStringLiteral(", "));
+}
+
+} // namespace
+
+QJsonArray keySequenceToDiagnosticJson(const QKeySequence &sequence)
 {
     QJsonArray array;
     const QStringList parts =
@@ -24,7 +44,7 @@ QJsonArray sequenceToJson(const QKeySequence &sequence)
     return array;
 }
 
-QString sequenceToText(const QList<QKeySequence> &sequences)
+QString keySequenceListToPortableText(const QList<QKeySequence> &sequences)
 {
     QStringList parts;
     parts.reserve(sequences.size());
@@ -36,7 +56,7 @@ QString sequenceToText(const QList<QKeySequence> &sequences)
     return parts.join(QStringLiteral(", "));
 }
 
-QKeySequence parseKeySequence(const QString &sequenceText)
+QKeySequence parseConfiguredKeySequence(const QString &sequenceText)
 {
     // Try the stable textual forms first so config values round-trip cleanly across
     // locales, then fall back to Qt's more permissive parser as a last resort.
@@ -60,26 +80,6 @@ QKeySequence parseKeySequence(const QString &sequenceText)
 
     return QKeySequence(sequenceText); // NOLINT(modernize-return-braced-init-list)
 }
-
-QString describeConflicts(const QKeySequence &requestedSequence)
-{
-    const QList<KGlobalShortcutInfo> conflicts =
-        KGlobalAccel::globalShortcutsByKey(requestedSequence, KGlobalAccel::Equal);
-    if (conflicts.isEmpty()) {
-        return {};
-    }
-
-    QStringList descriptions;
-    descriptions.reserve(conflicts.size());
-    for (const KGlobalShortcutInfo &conflict : conflicts) {
-        descriptions.append(QStringLiteral("%1/%2")
-                                .arg(conflict.componentUniqueName(), conflict.uniqueName()));
-    }
-    descriptions.removeDuplicates();
-    return descriptions.join(QStringLiteral(", "));
-}
-
-} // namespace
 
 HotkeyManager::HotkeyManager(ShortcutConfig config, QObject *parent)
     : QObject(parent)
@@ -157,7 +157,7 @@ bool HotkeyManager::registerShortcut(QString *errorMessage)
     }
 
     if (m_assignedSequence != requestedSequence) {
-        qCWarning(hotkeyLog) << "Requested shortcut" << m_config.sequence << "but KDE assigned" << sequenceToText(assignedShortcuts);
+        qCWarning(hotkeyLog) << "Requested shortcut" << m_config.sequence << "but KDE assigned" << keySequenceListToPortableText(assignedShortcuts);
     }
 
     m_pressedEvents = 0;
@@ -211,7 +211,7 @@ QJsonObject HotkeyManager::diagnostics() const
     QJsonObject object;
     object.insert(QStringLiteral("component_path"), QStringLiteral("/component/%1").arg(m_config.componentUnique));
     object.insert(QStringLiteral("configured_sequence"), m_config.sequence);
-    object.insert(QStringLiteral("assigned_sequence"), sequenceToJson(m_assignedSequence));
+    object.insert(QStringLiteral("assigned_sequence"), keySequenceToDiagnosticJson(m_assignedSequence));
     object.insert(QStringLiteral("assigned_sequence_text"), m_assignedSequence.toString(QKeySequence::PortableText));
     object.insert(QStringLiteral("pressed_events"), m_pressedEvents);
     object.insert(QStringLiteral("released_events"), m_releasedEvents);
@@ -254,7 +254,7 @@ bool HotkeyManager::parseSequence(QKeySequence *sequence, QString *errorMessage)
         return false;
     }
 
-    const QKeySequence parsed = parseKeySequence(m_config.sequence);
+    const QKeySequence parsed = parseConfiguredKeySequence(m_config.sequence);
     if (parsed.count() == 0) {
         if (errorMessage != nullptr) {
             *errorMessage = QStringLiteral("Could not parse shortcut sequence: %1").arg(m_config.sequence);

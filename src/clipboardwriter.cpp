@@ -12,6 +12,24 @@ Q_LOGGING_CATEGORY(clipboardLog, "mutterkey.clipboard")
 
 } // namespace
 
+QString clipboardBackendName(bool hasSystemClipboard, bool hasQtClipboard)
+{
+    if (hasSystemClipboard) {
+        return QStringLiteral("KSystemClipboard");
+    }
+
+    if (hasQtClipboard) {
+        return QStringLiteral("Qt QClipboard");
+    }
+
+    return QStringLiteral("unavailable");
+}
+
+bool clipboardRoundTripSucceeded(const QString &requestedText, const QString &actualText)
+{
+    return actualText == requestedText;
+}
+
 ClipboardWriter::ClipboardWriter(QClipboard *clipboard, QObject *parent)
     : QObject(parent)
     , m_clipboard(clipboard)
@@ -36,15 +54,7 @@ bool ClipboardWriter::copy(const QString &text)
 
 QString ClipboardWriter::backendName() const
 {
-    if (m_systemClipboard != nullptr) {
-        return QStringLiteral("KSystemClipboard");
-    }
-
-    if (m_clipboard != nullptr) {
-        return QStringLiteral("Qt QClipboard");
-    }
-
-    return QStringLiteral("unavailable");
+    return clipboardBackendName(m_systemClipboard != nullptr, m_clipboard != nullptr);
 }
 
 bool ClipboardWriter::copyWithSystemClipboard(const QString &text)
@@ -60,7 +70,7 @@ bool ClipboardWriter::copyWithSystemClipboard(const QString &text)
     }
 
     const QString clipboardText = m_systemClipboard->text(QClipboard::Clipboard);
-    const bool copied = (clipboardText == text);
+    const bool copied = clipboardRoundTripSucceeded(text, clipboardText);
     if (copied) {
         qCInfo(clipboardLog) << "Copied" << text.size() << "characters to the clipboard using" << backendName();
     } else {
@@ -89,7 +99,7 @@ bool ClipboardWriter::copyWithQtClipboard(const QString &text)
     QGuiApplication::processEvents();
 
     const QString clipboardText = m_clipboard->text(QClipboard::Clipboard);
-    const bool copied = (clipboardText == text);
+    const bool copied = clipboardRoundTripSucceeded(text, clipboardText);
     if (copied) {
         qCInfo(clipboardLog) << "Updated local clipboard state with"
                             << text.size()

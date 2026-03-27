@@ -12,6 +12,19 @@
 class QAudioSource;
 
 /**
+ * @brief Resolves the active capture format from config and device capabilities.
+ * @param config Requested audio capture settings.
+ * @param preferredFormat Device-preferred fallback format.
+ * @param requestedFormatSupported Whether the requested format is supported.
+ * @param errorMessage Optional output for unsupported-format failures.
+ * @return Capture format to use. Invalid when no compatible format exists.
+ */
+[[nodiscard]] QAudioFormat resolveRecordingFormatForConfig(const AudioConfig &config,
+                                                          const QAudioFormat &preferredFormat,
+                                                          bool requestedFormatSupported,
+                                                          QString *errorMessage = nullptr);
+
+/**
  * @file
  * @brief Audio capture primitives for push-to-talk recording.
  */

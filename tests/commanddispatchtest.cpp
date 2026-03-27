@@ -11,6 +11,8 @@ class CommandDispatchTest final : public QObject
 
 private slots:
     void commandIndexSkipsGlobalOptionValues();
+    void commandIndexTreatsDoubleDashAsCommandBoundary();
+    void commandIndexSkipsInlineGlobalOptionValues();
     void bareConfigShowsDedicatedHelp();
     void configHelpFlagShowsDedicatedHelp();
     void nonConfigCommandsDoNotShowConfigHelp();
@@ -37,6 +39,43 @@ void CommandDispatchTest::commandIndexSkipsGlobalOptionValues()
     };
 
     QCOMPARE(commandIndexFromArguments(arguments), 4);
+}
+
+void CommandDispatchTest::commandIndexTreatsDoubleDashAsCommandBoundary()
+{
+    // WHAT: Verify that `--` forces command discovery to stop parsing global options.
+    // HOW: Build an argument list where `config` appears only after `--` and check that the
+    // returned command index points to that post-separator command.
+    // WHY: The CLI needs a predictable escape hatch for command parsing so option-like values
+    // or explicit separators do not confuse dispatch.
+    const QStringList arguments{
+        QStringLiteral("mutterkey"),
+        QStringLiteral("--log-level"),
+        QStringLiteral("DEBUG"),
+        QStringLiteral("--"),
+        QStringLiteral("config"),
+        QStringLiteral("set"),
+    };
+
+    QCOMPARE(commandIndexFromArguments(arguments), 4);
+}
+
+void CommandDispatchTest::commandIndexSkipsInlineGlobalOptionValues()
+{
+    // WHAT: Verify that `--option=value` global arguments do not get mistaken for commands.
+    // HOW: Pass a command line that uses only inline-assignment global options before
+    // `config` and confirm that command discovery still finds the real subcommand.
+    // WHY: Modern CLI invocations commonly use inline option syntax, so dispatch must handle
+    // it consistently with separate option-value pairs.
+    const QStringList arguments{
+        QStringLiteral("mutterkey"),
+        QStringLiteral("--config=/tmp/config.json"),
+        QStringLiteral("--log-level=DEBUG"),
+        QStringLiteral("config"),
+        QStringLiteral("init"),
+    };
+
+    QCOMPARE(commandIndexFromArguments(arguments), 3);
 }
 
 void CommandDispatchTest::bareConfigShowsDedicatedHelp()

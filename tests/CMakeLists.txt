@@ -62,6 +62,10 @@ mutterkey_add_qt_test(whispercpptranscribertest
     ../src/transcription/whispercpptranscriber.cpp
 )
 
+mutterkey_add_qt_test(platformlogicstest
+    platformlogicstest.cpp
+)
+
 mutterkey_add_qt_test(traystatuswindowtest
     traystatuswindowtest.cpp
     ../src/control/daemoncontrolclient.cpp
@@ -72,12 +76,17 @@ mutterkey_add_qt_test(traystatuswindowtest
 )
 
 target_link_libraries(daemoncontrolclientservertest PRIVATE mutterkey_control)
+target_link_libraries(platformlogicstest PRIVATE mutterkey_core)
 target_link_libraries(whispercpptranscribertest PRIVATE whisper)
 
+add_test(NAME testcommentarycheck
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/check-test-commentary.sh ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
 if(TARGET clang-tidy)
-    add_dependencies(clang-tidy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen streamingtranscriptiontest_autogen daemoncontrolprotocoltest_autogen daemoncontroltypestest_autogen daemoncontrolclientservertest_autogen transcriptionworkertest_autogen whispercpptranscribertest_autogen traystatuswindowtest_autogen)
+    add_dependencies(clang-tidy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen streamingtranscriptiontest_autogen daemoncontrolprotocoltest_autogen daemoncontroltypestest_autogen daemoncontrolclientservertest_autogen transcriptionworkertest_autogen whispercpptranscribertest_autogen platformlogicstest_autogen traystatuswindowtest_autogen)
 endif()
 
 if(TARGET clazy)
-    add_dependencies(clazy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen streamingtranscriptiontest_autogen daemoncontrolprotocoltest_autogen daemoncontroltypestest_autogen daemoncontrolclientservertest_autogen transcriptionworkertest_autogen whispercpptranscribertest_autogen traystatuswindowtest_autogen)
+    add_dependencies(clazy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen streamingtranscriptiontest_autogen daemoncontrolprotocoltest_autogen daemoncontroltypestest_autogen daemoncontrolclientservertest_autogen transcriptionworkertest_autogen whispercpptranscribertest_autogen platformlogicstest_autogen traystatuswindowtest_autogen)
 endif()
