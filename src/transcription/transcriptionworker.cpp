@@ -1,5 +1,7 @@
 #include "transcription/transcriptionworker.h"
 
+#include "transcription/transcriptioncompat.h"
+
 #include <cassert>
 #include <utility>
 
@@ -18,6 +20,7 @@ TranscriptionWorker::TranscriptionWorker(std::shared_ptr<const TranscriptionEngi
 {
     assert(m_engine != nullptr);
     m_capabilities = m_engine->capabilities();
+    m_runtimeDiagnostics = m_engine->diagnostics();
 }
 
 TranscriptionWorker::TranscriptionWorker(std::unique_ptr<TranscriptionSession> transcriber, QObject *parent)
@@ -26,6 +29,7 @@ TranscriptionWorker::TranscriptionWorker(std::unique_ptr<TranscriptionSession> t
 {
     assert(m_transcriber != nullptr);
     m_capabilities.backendName = m_transcriber->backendName();
+    m_runtimeDiagnostics.backendName = m_transcriber->backendName();
 }
 
 QString TranscriptionWorker::backendName() const
@@ -38,13 +42,13 @@ BackendCapabilities TranscriptionWorker::capabilities() const
     return m_capabilities;
 }
 
-QString TranscriptionWorker::loadedModelDescription() const
+RuntimeDiagnostics TranscriptionWorker::runtimeDiagnostics() const
 {
-    if (m_model == nullptr) {
-        return {};
+    RuntimeDiagnostics diagnostics = m_runtimeDiagnostics;
+    if (m_model != nullptr) {
+        diagnostics.loadedModelDescription = m_model->modelDescription();
     }
-
-    return m_model->modelDescription();
+    return diagnostics;
 }
 
 bool TranscriptionWorker::warmup(RuntimeError *error)
@@ -61,7 +65,7 @@ bool TranscriptionWorker::warmup(RuntimeError *error)
     return ready;
 }
 
-void TranscriptionWorker::transcribe(const Recording &recording)
+void TranscriptionWorker::transcribeRecordingCompat(const Recording &recording)
 {
     RuntimeError runtimeError;
     if (!ensureSession(&runtimeError)) {
@@ -69,7 +73,7 @@ void TranscriptionWorker::transcribe(const Recording &recording)
         return;
     }
 
-    const TranscriptionResult result = m_transcriber->transcribe(recording);
+    const TranscriptionResult result = transcribeRecordingViaStreaming(*m_transcriber, recording, m_normalizer);
     if (!result.success) {
         if (shouldDiscardSession(result.error)) {
             m_transcriber.reset();

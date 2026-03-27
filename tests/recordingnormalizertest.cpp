@@ -34,18 +34,18 @@ class RecordingNormalizerTest final : public QObject
     Q_OBJECT
 
 private slots:
-    void normalizeForWhisperDownmixesStereoInput();
-    void normalizeForWhisperResamplesMonoInput();
-    void normalizeForWhisperAcceptsAlreadyNormalizedMonoInput();
-    void normalizeForWhisperRejectsEmptyRecording();
-    void normalizeForWhisperRejectsInvalidSampleFormat();
-    void normalizeForWhisperRejectsIncompleteFrames();
-    void normalizeForWhisperTruncatesTailBytesAfterCompleteFrames();
+    void normalizeForRuntimeDownmixesStereoInput();
+    void normalizeForRuntimeResamplesMonoInput();
+    void normalizeForRuntimeAcceptsAlreadyNormalizedMonoInput();
+    void normalizeForRuntimeRejectsEmptyRecording();
+    void normalizeForRuntimeRejectsInvalidSampleFormat();
+    void normalizeForRuntimeRejectsIncompleteFrames();
+    void normalizeForRuntimeTruncatesTailBytesAfterCompleteFrames();
 };
 
 } // namespace
 
-void RecordingNormalizerTest::normalizeForWhisperDownmixesStereoInput()
+void RecordingNormalizerTest::normalizeForRuntimeDownmixesStereoInput()
 {
     // WHAT: Verify that stereo PCM input is downmixed to Whisper's mono format.
     // HOW: Feed the normalizer a short stereo recording with matching left/right samples
@@ -62,7 +62,7 @@ void RecordingNormalizerTest::normalizeForWhisperDownmixesStereoInput()
     const RecordingNormalizer normalizer;
     NormalizedAudio normalizedAudio;
     QString errorMessage;
-    const bool ok = normalizer.normalizeForWhisper(recording, &normalizedAudio, &errorMessage);
+    const bool ok = normalizer.normalizeForRuntime(recording, &normalizedAudio, &errorMessage);
 
     QVERIFY2(ok, qPrintable(errorMessage));
     QVERIFY(errorMessage.isEmpty());
@@ -73,7 +73,7 @@ void RecordingNormalizerTest::normalizeForWhisperDownmixesStereoInput()
     QVERIFY(std::abs(normalizedAudio.samples.at(1) + 0.5f) < 0.0001f);
 }
 
-void RecordingNormalizerTest::normalizeForWhisperResamplesMonoInput()
+void RecordingNormalizerTest::normalizeForRuntimeResamplesMonoInput()
 {
     // WHAT: Verify that mono input is resampled to Whisper's required 16 kHz rate.
     // HOW: Provide an 8 kHz recording, run normalization, and check that the output sample
@@ -90,7 +90,7 @@ void RecordingNormalizerTest::normalizeForWhisperResamplesMonoInput()
     const RecordingNormalizer normalizer;
     NormalizedAudio normalizedAudio;
     QString errorMessage;
-    const bool ok = normalizer.normalizeForWhisper(recording, &normalizedAudio, &errorMessage);
+    const bool ok = normalizer.normalizeForRuntime(recording, &normalizedAudio, &errorMessage);
 
     QVERIFY2(ok, qPrintable(errorMessage));
     QVERIFY(errorMessage.isEmpty());
@@ -103,7 +103,7 @@ void RecordingNormalizerTest::normalizeForWhisperResamplesMonoInput()
     QVERIFY(std::abs(normalizedAudio.samples.at(3) - 0.5f) < 0.0001f);
 }
 
-void RecordingNormalizerTest::normalizeForWhisperAcceptsAlreadyNormalizedMonoInput()
+void RecordingNormalizerTest::normalizeForRuntimeAcceptsAlreadyNormalizedMonoInput()
 {
     // WHAT: Verify that already compatible mono 16 kHz PCM is accepted as-is.
     // HOW: Normalize an input that already matches Whisper's required structure and confirm
@@ -120,7 +120,7 @@ void RecordingNormalizerTest::normalizeForWhisperAcceptsAlreadyNormalizedMonoInp
     const RecordingNormalizer normalizer;
     NormalizedAudio normalizedAudio;
     QString errorMessage;
-    const bool ok = normalizer.normalizeForWhisper(recording, &normalizedAudio, &errorMessage);
+    const bool ok = normalizer.normalizeForRuntime(recording, &normalizedAudio, &errorMessage);
 
     QVERIFY2(ok, qPrintable(errorMessage));
     QVERIFY(errorMessage.isEmpty());
@@ -132,7 +132,7 @@ void RecordingNormalizerTest::normalizeForWhisperAcceptsAlreadyNormalizedMonoInp
     QVERIFY(std::abs(normalizedAudio.samples.at(2) - 0.9999695f) < 0.0001f);
 }
 
-void RecordingNormalizerTest::normalizeForWhisperRejectsEmptyRecording()
+void RecordingNormalizerTest::normalizeForRuntimeRejectsEmptyRecording()
 {
     // WHAT: Verify that an empty recording is rejected before any normalization work starts.
     // HOW: Pass a default-constructed recording and confirm that normalization fails with an
@@ -142,14 +142,14 @@ void RecordingNormalizerTest::normalizeForWhisperRejectsEmptyRecording()
     const RecordingNormalizer normalizer;
     NormalizedAudio normalizedAudio;
     QString errorMessage;
-    const bool ok = normalizer.normalizeForWhisper(Recording{}, &normalizedAudio, &errorMessage);
+    const bool ok = normalizer.normalizeForRuntime(Recording{}, &normalizedAudio, &errorMessage);
 
     QVERIFY(!ok);
     QCOMPARE(errorMessage, QStringLiteral("Recording is empty"));
     QVERIFY(!normalizedAudio.isValid());
 }
 
-void RecordingNormalizerTest::normalizeForWhisperRejectsInvalidSampleFormat()
+void RecordingNormalizerTest::normalizeForRuntimeRejectsInvalidSampleFormat()
 {
     // WHAT: Verify that unsupported sample formats are rejected.
     // HOW: Pass in a recording that uses floating-point samples instead of 16-bit PCM and
@@ -169,14 +169,14 @@ void RecordingNormalizerTest::normalizeForWhisperRejectsInvalidSampleFormat()
     const RecordingNormalizer normalizer;
     NormalizedAudio normalizedAudio;
     QString errorMessage;
-    const bool ok = normalizer.normalizeForWhisper(recording, &normalizedAudio, &errorMessage);
+    const bool ok = normalizer.normalizeForRuntime(recording, &normalizedAudio, &errorMessage);
 
     QVERIFY(!ok);
     QCOMPARE(errorMessage, QStringLiteral("Embedded Whisper only supports 16-bit PCM capture"));
     QVERIFY(!normalizedAudio.isValid());
 }
 
-void RecordingNormalizerTest::normalizeForWhisperRejectsIncompleteFrames()
+void RecordingNormalizerTest::normalizeForRuntimeRejectsIncompleteFrames()
 {
     // WHAT: Verify that truncated PCM frame data is rejected.
     // HOW: Provide a byte buffer whose size does not contain a whole stereo frame and check
@@ -196,14 +196,14 @@ void RecordingNormalizerTest::normalizeForWhisperRejectsIncompleteFrames()
     const RecordingNormalizer normalizer;
     NormalizedAudio normalizedAudio;
     QString errorMessage;
-    const bool ok = normalizer.normalizeForWhisper(recording, &normalizedAudio, &errorMessage);
+    const bool ok = normalizer.normalizeForRuntime(recording, &normalizedAudio, &errorMessage);
 
     QVERIFY(!ok);
     QCOMPARE(errorMessage, QStringLiteral("Recording does not contain complete PCM frames"));
     QVERIFY(!normalizedAudio.isValid());
 }
 
-void RecordingNormalizerTest::normalizeForWhisperTruncatesTailBytesAfterCompleteFrames()
+void RecordingNormalizerTest::normalizeForRuntimeTruncatesTailBytesAfterCompleteFrames()
 {
     // WHAT: Verify that extra tail bytes after a complete frame are ignored rather than breaking normalization.
     // HOW: Build stereo PCM data containing one full frame plus one extra byte, normalize it,
@@ -225,7 +225,7 @@ void RecordingNormalizerTest::normalizeForWhisperTruncatesTailBytesAfterComplete
     const RecordingNormalizer normalizer;
     NormalizedAudio normalizedAudio;
     QString errorMessage;
-    const bool ok = normalizer.normalizeForWhisper(recording, &normalizedAudio, &errorMessage);
+    const bool ok = normalizer.normalizeForRuntime(recording, &normalizedAudio, &errorMessage);
 
     QVERIFY2(ok, qPrintable(errorMessage));
     QVERIFY(errorMessage.isEmpty());

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "audio/recordingnormalizer.h"
 #include "config.h"
 #include "transcription/transcriptionengine.h"
 #include "transcription/transcriptiontypes.h"
@@ -73,6 +72,11 @@ public:
      * @return Capability data derived from the embedded backend integration.
      */
     [[nodiscard]] static BackendCapabilities capabilitiesStatic();
+    /**
+     * @brief Returns runtime diagnostics for the embedded whisper runtime.
+     * @return Runtime/device diagnostic data for this backend.
+     */
+    [[nodiscard]] static RuntimeDiagnostics diagnosticsStatic();
     [[nodiscard]] QString backendName() const override;
 
     /**
@@ -83,16 +87,22 @@ public:
     bool warmup(RuntimeError *error = nullptr) override;
 
     /**
-     * @brief Normalizes and transcribes one captured recording.
-     * @param recording Captured audio payload and format metadata.
-     * @return Structured transcription result.
+     * @brief Appends one normalized chunk to the current utterance buffer.
+     * @param chunk Product-owned normalized audio chunk.
+     * @return Empty update on success or a structured runtime failure.
      */
-    [[nodiscard]] TranscriptionResult transcribe(const Recording &recording) override;
+    [[nodiscard]] TranscriptUpdate pushAudioChunk(const AudioChunk &chunk) override;
+
+    /**
+     * @brief Decodes the buffered utterance and emits final transcript events.
+     * @return Structured transcript update for the completed utterance.
+     */
+    [[nodiscard]] TranscriptUpdate finish() override;
 
     /**
      * @brief Requests cooperative cancellation of active backend work.
      */
-    void cancel() override;
+    [[nodiscard]] TranscriptUpdate cancel() override;
 
 private:
     /**
@@ -112,10 +122,17 @@ private:
     TranscriberConfig m_config;
     /// Shared immutable whisper model handle loaded by the engine.
     std::shared_ptr<const WhisperCppModelHandle> m_model;
-    /// Audio-format conversion helper used before calling whisper.cpp.
-    RecordingNormalizer m_normalizer;
     /// Owned whisper.cpp decode state with RAII cleanup.
     std::unique_ptr<whisper_state, void (*)(whisper_state *)> m_state;
+    /// Session-owned normalized audio accumulated through the streaming interface.
+    std::vector<float> m_bufferedSamples;
     /// Cooperative cancellation flag checked by whisper.cpp abort callback.
     std::atomic_bool m_cancelRequested = false;
 };
+
+/**
+ * @brief Creates the embedded whisper.cpp engine implementation.
+ * @param config Whisper runtime configuration copied into the engine.
+ * @return Engine backed by the vendored whisper.cpp integration.
+ */
+[[nodiscard]] std::shared_ptr<const TranscriptionEngine> createWhisperCppTranscriptionEngine(const TranscriberConfig &config);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "audio/recording.h"
+#include "audio/recordingnormalizer.h"
 #include "transcription/transcriptionengine.h"
 
 #include <QObject>
@@ -52,10 +53,10 @@ public:
     [[nodiscard]] BackendCapabilities capabilities() const;
 
     /**
-     * @brief Returns the currently loaded model description, if available.
-     * @return Human-readable loaded model description or an empty string.
+     * @brief Returns runtime diagnostics for the active backend instance.
+     * @return Runtime diagnostics snapshot including the loaded model description.
      */
-    [[nodiscard]] QString loadedModelDescription() const;
+    [[nodiscard]] RuntimeDiagnostics runtimeDiagnostics() const;
 
     /**
      * @brief Eagerly initializes backend state before the first real transcription.
@@ -68,7 +69,7 @@ public:
      * @brief Transcribes a captured recording and emits a result signal.
      * @param recording Captured audio payload to transcribe.
      */
-    void transcribe(const Recording &recording);
+    void transcribeRecordingCompat(const Recording &recording);
 
 signals:
     /**
@@ -95,6 +96,10 @@ private:
     std::shared_ptr<const TranscriptionModelHandle> m_model;
     /// Capability snapshot reported even before the first session exists.
     BackendCapabilities m_capabilities;
+    /// Runtime diagnostics reported separately from static capabilities.
+    RuntimeDiagnostics m_runtimeDiagnostics;
+    /// Product-owned recorder-to-runtime audio normalization helper.
+    RecordingNormalizer m_normalizer;
     /// Owned transcription backend implementation.
     std::unique_ptr<TranscriptionSession> m_transcriber;
 };

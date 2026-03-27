@@ -95,7 +95,7 @@ std::vector<float> resampleLinear(const std::vector<float> &samples, int inputSa
 
 } // namespace
 
-bool RecordingNormalizer::normalizeForWhisper(const Recording &recording,
+bool RecordingNormalizer::normalizeForRuntime(const Recording &recording,
                                               NormalizedAudio *normalizedAudio,
                                               QString *errorMessage) const
 {
