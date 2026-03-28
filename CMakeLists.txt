@@ -15,6 +15,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(MUTTERKEY_ENABLE_ASAN "Enable AddressSanitizer for repo-owned code and vendored whisper.cpp" OFF)
 option(MUTTERKEY_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer for repo-owned code and vendored whisper.cpp" OFF)
+option(MUTTERKEY_ENABLE_LEGACY_WHISPER "Build the legacy whisper.cpp runtime for migration and parity validation" ON)
 option(MUTTERKEY_ENABLE_WHISPER_CUDA "Enable whisper.cpp CUDA backend support (NVIDIA)" OFF)
 option(MUTTERKEY_ENABLE_WHISPER_VULKAN "Enable whisper.cpp Vulkan backend support" OFF)
 option(MUTTERKEY_ENABLE_WHISPER_BLAS "Enable whisper.cpp BLAS CPU acceleration" OFF)
@@ -47,6 +48,10 @@ set(MUTTERKEY_CORE_SOURCES
     src/transcription/transcriptionengine.h
     src/transcription/audiochunker.cpp
     src/transcription/audiochunker.h
+    src/transcription/cpureferencemodel.cpp
+    src/transcription/cpureferencemodel.h
+    src/transcription/cpureferencetranscriber.cpp
+    src/transcription/cpureferencetranscriber.h
     src/transcription/modelcatalog.cpp
     src/transcription/modelcatalog.h
     src/transcription/modelpackage.cpp
@@ -57,15 +62,22 @@ set(MUTTERKEY_CORE_SOURCES
     src/transcription/rawwhisperimporter.h
     src/transcription/rawwhisperprobe.cpp
     src/transcription/rawwhisperprobe.h
+    src/transcription/runtimeselector.cpp
+    src/transcription/runtimeselector.h
     src/transcription/transcriptassembler.cpp
     src/transcription/transcriptassembler.h
     src/transcription/transcriptioncompat.cpp
     src/transcription/transcriptioncompat.h
     src/transcription/transcriptionworker.cpp
     src/transcription/transcriptionworker.h
-    src/transcription/whispercpptranscriber.cpp
-    src/transcription/whispercpptranscriber.h
 )
+
+if(MUTTERKEY_ENABLE_LEGACY_WHISPER)
+    list(APPEND MUTTERKEY_CORE_SOURCES
+        src/transcription/whispercpptranscriber.cpp
+        src/transcription/whispercpptranscriber.h
+    )
+endif()
 
 set(MUTTERKEY_CONTROL_SOURCES
     src/control/daemoncontrolclient.cpp
@@ -113,6 +125,10 @@ set_target_properties(mutterkey-tray PROPERTIES
     BUILD_RPATH "$ORIGIN/../lib"
     INSTALL_RPATH "$ORIGIN/../lib"
 )
+
+if(MUTTERKEY_ENABLE_LEGACY_WHISPER)
+    target_compile_definitions(mutterkey_core PRIVATE MUTTERKEY_WITH_LEGACY_WHISPER)
+endif()
 
 function(mutterkey_enable_sanitizers target_name)
     if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
@@ -203,47 +219,53 @@ else()
     message(STATUS "Doxygen not found; the docs target will be unavailable")
 endif()
 
-if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/whisper.cpp/CMakeLists.txt")
-    message(FATAL_ERROR "Vendored whisper.cpp dependency is missing from third_party/whisper.cpp")
+if(MUTTERKEY_ENABLE_LEGACY_WHISPER)
+    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/whisper.cpp/CMakeLists.txt")
+        message(FATAL_ERROR "Vendored whisper.cpp dependency is missing from third_party/whisper.cpp")
+    endif()
+
+    set(WHISPER_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(WHISPER_BUILD_SERVER OFF CACHE BOOL "" FORCE)
+    set(WHISPER_SANITIZE_ADDRESS ${MUTTERKEY_ENABLE_ASAN} CACHE BOOL "" FORCE)
+    set(WHISPER_SANITIZE_UNDEFINED ${MUTTERKEY_ENABLE_UBSAN} CACHE BOOL "" FORCE)
+    set(GGML_CUDA ${MUTTERKEY_ENABLE_WHISPER_CUDA} CACHE BOOL "" FORCE)
+    set(GGML_VULKAN ${MUTTERKEY_ENABLE_WHISPER_VULKAN} CACHE BOOL "" FORCE)
+    set(GGML_BLAS ${MUTTERKEY_ENABLE_WHISPER_BLAS} CACHE BOOL "" FORCE)
+    set(GGML_BLAS_VENDOR ${MUTTERKEY_WHISPER_BLAS_VENDOR} CACHE STRING "" FORCE)
+    add_subdirectory(third_party/whisper.cpp EXCLUDE_FROM_ALL)
+
+    # Mutterkey ships the vendored shared libraries, but it does not install their
+    # upstream public headers as part of its own package layout.
+    set_target_properties(whisper ggml PROPERTIES PUBLIC_HEADER "")
+
+    target_link_libraries(mutterkey_core PRIVATE whisper)
 endif()
-
-set(WHISPER_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(WHISPER_BUILD_SERVER OFF CACHE BOOL "" FORCE)
-set(WHISPER_SANITIZE_ADDRESS ${MUTTERKEY_ENABLE_ASAN} CACHE BOOL "" FORCE)
-set(WHISPER_SANITIZE_UNDEFINED ${MUTTERKEY_ENABLE_UBSAN} CACHE BOOL "" FORCE)
-set(GGML_CUDA ${MUTTERKEY_ENABLE_WHISPER_CUDA} CACHE BOOL "" FORCE)
-set(GGML_VULKAN ${MUTTERKEY_ENABLE_WHISPER_VULKAN} CACHE BOOL "" FORCE)
-set(GGML_BLAS ${MUTTERKEY_ENABLE_WHISPER_BLAS} CACHE BOOL "" FORCE)
-set(GGML_BLAS_VENDOR ${MUTTERKEY_WHISPER_BLAS_VENDOR} CACHE STRING "" FORCE)
-add_subdirectory(third_party/whisper.cpp EXCLUDE_FROM_ALL)
-
-# Mutterkey ships the vendored shared libraries, but it does not install their
-# upstream public headers as part of its own package layout.
-set_target_properties(whisper ggml PROPERTIES PUBLIC_HEADER "")
-
-target_link_libraries(mutterkey_core PRIVATE whisper)
 
 install(TARGETS mutterkey RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(TARGETS mutterkey-tray RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(TARGETS whisper ggml ggml-base
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-)
-if(TARGET ggml-cpu)
-    install(TARGETS ggml-cpu LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
-endif()
-if(TARGET ggml-cuda)
-    install(TARGETS ggml-cuda LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
-endif()
-if(TARGET ggml-vulkan)
-    install(TARGETS ggml-vulkan LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
-endif()
-if(TARGET ggml-blas)
-    install(TARGETS ggml-blas LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+if(MUTTERKEY_ENABLE_LEGACY_WHISPER)
+    install(TARGETS whisper ggml ggml-base
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    )
+    if(TARGET ggml-cpu)
+        install(TARGETS ggml-cpu LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+    endif()
+    if(TARGET ggml-cuda)
+        install(TARGETS ggml-cuda LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+    endif()
+    if(TARGET ggml-vulkan)
+        install(TARGETS ggml-vulkan LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+    endif()
+    if(TARGET ggml-blas)
+        install(TARGETS ggml-blas LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+    endif()
 endif()
 install(FILES contrib/org.mutterkey.mutterkey.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 install(FILES LICENSE THIRD_PARTY_NOTICES.md DESTINATION ${MUTTERKEY_LICENSE_INSTALL_DIR})
-install(FILES third_party/whisper.cpp/LICENSE DESTINATION ${MUTTERKEY_LICENSE_INSTALL_DIR}/third_party/whisper.cpp)
+if(MUTTERKEY_ENABLE_LEGACY_WHISPER)
+    install(FILES third_party/whisper.cpp/LICENSE DESTINATION ${MUTTERKEY_LICENSE_INSTALL_DIR}/third_party/whisper.cpp)
+endif()
 
 if(BUILD_TESTING)
     find_package(Qt6 REQUIRED COMPONENTS Test)

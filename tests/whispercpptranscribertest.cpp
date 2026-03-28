@@ -12,6 +12,7 @@ class WhisperCppTranscriberTest final : public QObject
 private slots:
     void whisperEngineSurfacesMissingModelAtLoadTime();
     void whisperRuntimeRejectsUnsupportedLanguage();
+    void legacyEngineDiagnosticsExplainFallback();
 };
 
 } // namespace
@@ -52,6 +53,21 @@ void WhisperCppTranscriberTest::whisperRuntimeRejectsUnsupportedLanguage()
     QVERIFY(!update.isOk());
     QCOMPARE(update.error.code, RuntimeErrorCode::UnsupportedLanguage);
     QVERIFY(update.error.message.contains(QStringLiteral("pirate")));
+}
+
+void WhisperCppTranscriberTest::legacyEngineDiagnosticsExplainFallback()
+{
+    // WHAT: Verify that the generic engine surfaces a legacy-selection reason when the model path cannot be inspected.
+    // HOW: Construct the generic engine with a definitely missing model path and inspect the reported runtime diagnostics.
+    // WHY: The runtime selector should explain why it fell back to the legacy backend so diagnose output can distinguish policy fallback from normal compatibility routing.
+    TranscriberConfig config;
+    config.modelPath = QStringLiteral("/tmp/definitely-missing-mutterkey-model.bin");
+
+    const std::shared_ptr<const TranscriptionEngine> engine = createTranscriptionEngine(config);
+    QVERIFY(engine != nullptr);
+    QCOMPARE(engine->diagnostics().backendName, QStringLiteral("whisper.cpp"));
+    QVERIFY(engine->diagnostics().selectionReason.contains(QStringLiteral("legacy whisper runtime"),
+                                                          Qt::CaseInsensitive));
 }
 
 QTEST_APPLESS_MAIN(WhisperCppTranscriberTest)

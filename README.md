@@ -131,6 +131,10 @@ This installs:
 - `~/.local/lib/libwhisper.so*` and the required `ggml` libraries
 - `~/.local/share/applications/org.mutterkey.mutterkey.desktop`
 
+If you configure with `-DMUTTERKEY_ENABLE_LEGACY_WHISPER=OFF`, Mutterkey builds
+without the vendored `whisper.cpp` runtime and does not install the legacy
+`libwhisper` / `ggml` shared libraries.
+
 Optional acceleration flags:
 
 ```bash
@@ -164,6 +168,7 @@ Notes:
 - `MUTTERKEY_ENABLE_WHISPER_VULKAN=ON` is for Vulkan-capable GPUs and requires Vulkan development headers and loader libraries
 - `MUTTERKEY_ENABLE_WHISPER_BLAS=ON` improves CPU inference speed rather than enabling GPU execution
 - these options are forwarded to the vendored `whisper.cpp` / `ggml` build and install any resulting backend libraries alongside Mutterkey
+- `-DMUTTERKEY_ENABLE_LEGACY_WHISPER=OFF` disables the vendored runtime entirely and skips all `whisper.cpp` / `ggml` install targets
 
 ### 2. Put a model on disk
 

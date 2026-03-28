@@ -72,6 +72,8 @@ struct BackendCapabilities {
 struct RuntimeDiagnostics {
     /// Stable backend identifier used in diagnostics.
     QString backendName;
+    /// Human-readable explanation for why this runtime was selected.
+    QString selectionReason;
     /// Human-readable runtime and device summary.
     QString runtimeDescription;
     /// Loaded-model description when a model is available.

@@ -65,15 +65,34 @@ mutterkey_add_qt_test(transcriptionworkertest
     ../src/transcription/transcriptionworker.cpp
 )
 
-mutterkey_add_qt_test(whispercpptranscribertest
-    whispercpptranscribertest.cpp
+mutterkey_add_qt_test(cpureferencetranscribertest
+    cpureferencetranscribertest.cpp
+    ../src/transcription/cpureferencemodel.cpp
     ../src/transcription/modelcatalog.cpp
     ../src/transcription/transcriptionengine.cpp
     ../src/transcription/modelpackage.cpp
     ../src/transcription/modelvalidator.cpp
+    ../src/transcription/cpureferencetranscriber.cpp
     ../src/transcription/rawwhisperprobe.cpp
-    ../src/transcription/whispercpptranscriber.cpp
+    ../src/transcription/runtimeselector.cpp
 )
+
+if(MUTTERKEY_ENABLE_LEGACY_WHISPER)
+    mutterkey_add_qt_test(whispercpptranscribertest
+        whispercpptranscribertest.cpp
+        ../src/transcription/cpureferencemodel.cpp
+        ../src/transcription/modelcatalog.cpp
+        ../src/transcription/transcriptionengine.cpp
+        ../src/transcription/modelpackage.cpp
+        ../src/transcription/modelvalidator.cpp
+        ../src/transcription/rawwhisperprobe.cpp
+        ../src/transcription/cpureferencetranscriber.cpp
+        ../src/transcription/runtimeselector.cpp
+        ../src/transcription/whispercpptranscriber.cpp
+    )
+    target_compile_definitions(whispercpptranscribertest PRIVATE MUTTERKEY_WITH_LEGACY_WHISPER)
+    target_link_libraries(whispercpptranscribertest PRIVATE whisper)
+endif()
 
 mutterkey_add_qt_test(platformlogicstest
     platformlogicstest.cpp
@@ -90,16 +109,21 @@ mutterkey_add_qt_test(traystatuswindowtest
 
 target_link_libraries(daemoncontrolclientservertest PRIVATE mutterkey_control)
 target_link_libraries(platformlogicstest PRIVATE mutterkey_core)
-target_link_libraries(whispercpptranscribertest PRIVATE whisper)
 
 add_test(NAME testcommentarycheck
     COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/check-test-commentary.sh ${CMAKE_CURRENT_SOURCE_DIR}/..
 )
 
 if(TARGET clang-tidy)
-    add_dependencies(clang-tidy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen streamingtranscriptiontest_autogen modelpackagetest_autogen daemoncontrolprotocoltest_autogen daemoncontroltypestest_autogen daemoncontrolclientservertest_autogen transcriptionworkertest_autogen whispercpptranscribertest_autogen platformlogicstest_autogen traystatuswindowtest_autogen)
+    add_dependencies(clang-tidy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen streamingtranscriptiontest_autogen modelpackagetest_autogen daemoncontrolprotocoltest_autogen daemoncontroltypestest_autogen daemoncontrolclientservertest_autogen transcriptionworkertest_autogen cpureferencetranscribertest_autogen platformlogicstest_autogen traystatuswindowtest_autogen)
+    if(TARGET whispercpptranscribertest_autogen)
+        add_dependencies(clang-tidy whispercpptranscribertest_autogen)
+    endif()
 endif()
 
 if(TARGET clazy)
-    add_dependencies(clazy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen streamingtranscriptiontest_autogen modelpackagetest_autogen daemoncontrolprotocoltest_autogen daemoncontroltypestest_autogen daemoncontrolclientservertest_autogen transcriptionworkertest_autogen whispercpptranscribertest_autogen platformlogicstest_autogen traystatuswindowtest_autogen)
+    add_dependencies(clazy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen streamingtranscriptiontest_autogen modelpackagetest_autogen daemoncontrolprotocoltest_autogen daemoncontroltypestest_autogen daemoncontrolclientservertest_autogen transcriptionworkertest_autogen cpureferencetranscribertest_autogen platformlogicstest_autogen traystatuswindowtest_autogen)
+    if(TARGET whispercpptranscribertest_autogen)
+        add_dependencies(clazy whispercpptranscribertest_autogen)
+    endif()
 endif()

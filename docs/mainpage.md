@@ -13,7 +13,7 @@ Current behavior:
 
 - registers a global shortcut through `KGlobalAccel`
 - records microphone audio while the shortcut is held
-- transcribes locally through an embedded `whisper.cpp` backend
+- transcribes locally through the configured runtime path
 - copies the resulting text to the clipboard
 - expects you to paste the text yourself with `Ctrl+V`
 
@@ -26,12 +26,16 @@ Current runtime shape:
   transcript events
 - `BackendCapabilities` reports static backend support used for orchestration
 - `RuntimeDiagnostics` reports runtime/device/model inspection data separately
-  from static capabilities
+  from static capabilities, including runtime-selection reasoning
 - `RuntimeError` and `RuntimeErrorCode` provide typed runtime failures
 - `ModelCatalog`, `ModelPackage`, and `ModelValidator` own model inspection,
   compatibility checks, and integrity validation before backend load
 - raw Whisper `.bin` files are handled only through an explicit compatibility
   path and import flow
+- `RuntimeSelector` owns runtime-selection policy instead of burying that logic
+  in the generic factory
+- `CpuReferenceModelHandle` and related native model helpers own the current
+  product-owned CPU reference model loading boundary
 - `TranscriptionWorker` hosts transcription on a dedicated `QThread` and
   creates live sessions lazily on that worker thread
 - the shipped daemon and `once` flows still use a compatibility wrapper that
@@ -51,8 +55,12 @@ Core API surface covered here:
   artifacts into validated product-owned model metadata.
 - `RawWhisperImporter` converts raw whisper.cpp-compatible `ggml` `.bin` files
   into native Mutterkey packages.
+- `RuntimeSelector` decides which runtime implementation should handle a given
+  configured model path and records the reason in diagnostics.
 - `TranscriptionEngine` and `TranscriptionSession` define the app-owned runtime
   seam.
+- `CpuReferenceTranscriber` provides the current product-owned native CPU
+  reference runtime scaffold.
 - `WhisperCppTranscriber` performs in-process transcription through vendored
   `whisper.cpp`.
 - `ClipboardWriter` copies the resulting text to the clipboard.
@@ -65,7 +73,11 @@ Current product direction:
 - local-only transcription
 - CLI/service-first operation
 - tray-shell work exists, but the daemon remains the product core
-- `whisper.cpp` is still the only supported backend implementation
+- a product-owned native CPU reference runtime now exists for ownership,
+  packaging, and conformance work
+- `whisper.cpp` is still the only real end-user speech decoder today
+- the vendored runtime is now optional at build time through
+  `MUTTERKEY_ENABLE_LEGACY_WHISPER=OFF`
 
 For build, runtime, release, and service setup use the repository `README.md`
 and `RELEASE_CHECKLIST.md`.
