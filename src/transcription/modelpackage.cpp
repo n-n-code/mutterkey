@@ -1,5 +1,6 @@
 #include "transcription/modelpackage.h"
 
+#include <algorithm>
 #include <QDir>
 #include <QJsonArray>
 #include <QStandardPaths>
@@ -128,6 +129,33 @@ QString sanitizePackageId(const QString &value)
         sanitized.chop(1);
     }
     return sanitized;
+}
+
+QString cpuReferenceEngineName()
+{
+    return QStringLiteral("mutterkey.cpu-reference");
+}
+
+QString cpuReferenceModelFormat()
+{
+    return QStringLiteral("mkasr-v1");
+}
+
+QString legacyWhisperEngineName()
+{
+    return QStringLiteral("whisper.cpp");
+}
+
+QString legacyWhisperModelFormat()
+{
+    return QStringLiteral("ggml");
+}
+
+bool modelPackageSupportsCompatibility(const ModelPackageManifest &manifest, QStringView engine, QStringView modelFormat)
+{
+    return std::ranges::any_of(manifest.compatibleEngines, [engine, modelFormat](const ModelCompatibilityMarker &marker) {
+        return marker.engine == engine && marker.modelFormat == modelFormat;
+    });
 }
 
 QJsonObject modelPackageManifestToJson(const ModelPackageManifest &manifest)

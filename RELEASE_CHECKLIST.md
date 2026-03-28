@@ -41,6 +41,10 @@ bash scripts/run-release-checklist.sh
 bash scripts/run-release-checklist.sh -- -DMUTTERKEY_ENABLE_WHISPER_CUDA=ON
 ```
 
+```bash
+bash scripts/run-release-checklist.sh -- -DMUTTERKEY_ENABLE_LEGACY_WHISPER=OFF
+```
+
 - The script intentionally stops before install validation and still prints the
   remaining manual review items that need human judgment.
 
@@ -69,6 +73,8 @@ cmake -S . -B "$BUILD_DIR" -G Ninja -DCMAKE_BUILD_TYPE=Debug -DMUTTERKEY_ENABLE_
   - `MUTTERKEY_ENABLE_WHISPER_CUDA=ON`: NVIDIA GPU build through vendored `ggml`
   - `MUTTERKEY_ENABLE_WHISPER_VULKAN=ON`: Vulkan GPU build through vendored `ggml`
   - `MUTTERKEY_ENABLE_WHISPER_BLAS=ON`: faster CPU inference, not GPU execution
+  - `MUTTERKEY_ENABLE_LEGACY_WHISPER=OFF`: disable vendored `whisper.cpp` /
+    `ggml` entirely and validate the native-runtime-only build path
   - choose the backend intentionally for the release artifact and record that choice in release notes or packaging docs when relevant
 
 - Build:
@@ -140,14 +146,18 @@ cmake --install "$BUILD_DIR" --prefix "$INSTALL_DIR"
 - Confirm the installed tree contains:
   - `bin/mutterkey`
   - `bin/mutterkey-tray`
-  - required `libwhisper` / `ggml` shared libraries
   - the desktop file under `share/applications`
   - license files under `share/licenses/mutterkey`
+- If the release keeps legacy whisper support enabled, also confirm the
+  installed tree contains:
+  - required `libwhisper` / `ggml` shared libraries
 - If acceleration was enabled for the release, also confirm the installed tree
   contains the expected backend library:
   - `libggml-cuda.so*` for `MUTTERKEY_ENABLE_WHISPER_CUDA=ON`
   - `libggml-vulkan.so*` for `MUTTERKEY_ENABLE_WHISPER_VULKAN=ON`
   - `libggml-blas.so*` for `MUTTERKEY_ENABLE_WHISPER_BLAS=ON`
+- If the release disables legacy whisper support, confirm the installed tree
+  does not contain vendored `libwhisper` / `ggml` shared libraries by mistake.
 - Do not expect vendored upstream public headers to be installed; Mutterkey's
   install rules ship the runtime libraries but intentionally clear vendored
   `PUBLIC_HEADER` metadata to avoid upstream header-install warnings.
@@ -204,6 +214,11 @@ MODEL_OUT="$(mktemp -d /tmp/mutterkey-release-model-XXXXXX)/base-en"
   repo-owned API docs or docs/CI wiring.
 - Confirm the docs describe native Mutterkey model packages as the canonical
   artifact and raw Whisper `.bin` files as migration compatibility only.
+- Confirm the docs also reflect the current runtime state accurately:
+  - a product-owned native CPU reference runtime now exists
+  - `MUTTERKEY_ENABLE_LEGACY_WHISPER=OFF` is supported for native-only builds
+  - `whisper.cpp` is still the only real end-user speech decoder unless the
+    release intentionally changes that
 - Confirm the documented recommended path is still the `systemd --user` service.
 - Confirm [contrib/mutterkey.service](contrib/mutterkey.service) matches the
   recommended installed-binary setup.
@@ -215,6 +230,9 @@ MODEL_OUT="$(mktemp -d /tmp/mutterkey-release-model-XXXXXX)/base-en"
   - CUDA/Vulkan releases should not log only `registered backend CPU`
   - CPU-accelerated BLAS releases may still be CPU-only, but should be tested
     against a representative Whisper model and expected performance target
+- If the release is intended to rely on the native runtime path, verify
+  diagnostics on a representative machine show the native runtime and an
+  explicit native selection reason rather than a legacy whisper fallback.
 
 ## Vendored whisper.cpp Updates
 

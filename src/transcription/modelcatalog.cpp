@@ -19,8 +19,8 @@ ModelPackageManifest legacyManifestForPath(const QString &sourcePath, const Mode
     manifest.schemaVersion = 1;
     manifest.metadata = metadata;
     manifest.compatibleEngines.push_back(ModelCompatibilityMarker{
-        .engine = QStringLiteral("whisper.cpp"),
-        .modelFormat = QStringLiteral("ggml"),
+        .engine = legacyWhisperEngineName(),
+        .modelFormat = legacyWhisperModelFormat(),
     });
     manifest.assets.push_back(ModelAssetMetadata{
         .role = QStringLiteral("weights"),
@@ -62,8 +62,8 @@ std::optional<ValidatedModelPackage> ModelCatalog::inspectPath(const QString &pa
         return std::nullopt;
     }
 
-    if ((!requiredEngine.isEmpty() && requiredEngine != QStringLiteral("whisper.cpp"))
-        || (!requiredModelFormat.isEmpty() && requiredModelFormat != QStringLiteral("ggml"))) {
+    if ((!requiredEngine.isEmpty() && requiredEngine != legacyWhisperEngineName())
+        || (!requiredModelFormat.isEmpty() && requiredModelFormat != legacyWhisperModelFormat())) {
         if (error != nullptr) {
             *error = makeRuntimeError(RuntimeErrorCode::IncompatibleModelPackage,
                                       QStringLiteral("Raw Whisper compatibility artifact does not match the active runtime"));

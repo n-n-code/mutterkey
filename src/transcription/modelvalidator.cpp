@@ -85,6 +85,10 @@ bool hasRequiredCompatibility(const ModelPackageManifest &manifest, QStringView 
         return true;
     }
 
+    if (!engine.isEmpty() && !modelFormat.isEmpty()) {
+        return modelPackageSupportsCompatibility(manifest, engine, modelFormat);
+    }
+
     return std::ranges::any_of(manifest.compatibleEngines, [engine, modelFormat](const ModelCompatibilityMarker &marker) {
         const bool engineMatches = engine.isEmpty() || marker.engine == engine;
         const bool formatMatches = modelFormat.isEmpty() || marker.modelFormat == modelFormat;

@@ -130,8 +130,8 @@ std::optional<ValidatedModelPackage> RawWhisperImporter::importFile(const QStrin
     manifest.schemaVersion = 1;
     manifest.metadata = *metadata;
     manifest.compatibleEngines.push_back(ModelCompatibilityMarker{
-        .engine = QStringLiteral("whisper.cpp"),
-        .modelFormat = QStringLiteral("ggml"),
+        .engine = legacyWhisperEngineName(),
+        .modelFormat = legacyWhisperModelFormat(),
     });
     manifest.assets.push_back(ModelAssetMetadata{
         .role = QStringLiteral("weights"),
@@ -163,5 +163,5 @@ std::optional<ValidatedModelPackage> RawWhisperImporter::importFile(const QStrin
         return std::nullopt;
     }
 
-    return ModelValidator::validatePackagePath(packageDirectory, QStringLiteral("whisper.cpp"), QStringLiteral("ggml"), error);
+    return ModelValidator::validatePackagePath(packageDirectory, legacyWhisperEngineName(), legacyWhisperModelFormat(), error);
 }

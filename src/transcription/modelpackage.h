@@ -89,6 +89,41 @@ struct ValidatedModelPackage {
 };
 
 /**
+ * @brief Stable engine identifier for the native CPU reference runtime.
+ * @return Product-owned engine marker recorded in package manifests.
+ */
+[[nodiscard]] QString cpuReferenceEngineName();
+
+/**
+ * @brief Stable model-format identifier for the native CPU reference runtime.
+ * @return Product-owned model-format marker recorded in package manifests.
+ */
+[[nodiscard]] QString cpuReferenceModelFormat();
+
+/**
+ * @brief Stable engine identifier for the legacy whisper.cpp adapter.
+ * @return Legacy engine marker recorded in package manifests.
+ */
+[[nodiscard]] QString legacyWhisperEngineName();
+
+/**
+ * @brief Stable model-format identifier for the legacy whisper.cpp adapter.
+ * @return Legacy model-format marker recorded in package manifests.
+ */
+[[nodiscard]] QString legacyWhisperModelFormat();
+
+/**
+ * @brief Reports whether a manifest advertises compatibility with a runtime marker pair.
+ * @param manifest Parsed model package manifest.
+ * @param engine Stable engine identifier to match.
+ * @param modelFormat Stable model-format marker to match.
+ * @return `true` when the manifest contains a matching compatibility marker.
+ */
+[[nodiscard]] bool modelPackageSupportsCompatibility(const ModelPackageManifest &manifest,
+                                                     QStringView engine,
+                                                     QStringView modelFormat);
+
+/**
  * @brief Returns the default root directory for native model packages.
  * @return Default package directory under the app data root.
  */

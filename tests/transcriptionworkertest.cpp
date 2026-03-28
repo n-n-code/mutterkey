@@ -36,6 +36,7 @@ RuntimeDiagnostics fakeDiagnostics()
 {
     return RuntimeDiagnostics{
         .backendName = QStringLiteral("fake"),
+        .selectionReason = QStringLiteral("fake selection"),
         .runtimeDescription = QStringLiteral("fake runtime"),
         .loadedModelDescription = {},
     };

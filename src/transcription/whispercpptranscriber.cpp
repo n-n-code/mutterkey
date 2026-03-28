@@ -1,6 +1,7 @@
 #include "transcription/whispercpptranscriber.h"
 
 #include "transcription/modelcatalog.h"
+#include "transcription/runtimeselector.h"
 
 #include <algorithm>
 #include <atomic>
@@ -170,7 +171,7 @@ std::shared_ptr<const TranscriptionModelHandle>
 WhisperCppTranscriber::loadModelHandle(const TranscriberConfig &config, RuntimeError *error)
 {
     const std::optional<ValidatedModelPackage> package =
-        ModelCatalog::inspectPath(config.modelPath, QStringLiteral("whisper.cpp"), QStringLiteral("ggml"), error);
+        ModelCatalog::inspectPath(config.modelPath, legacyWhisperEngineName(), legacyWhisperModelFormat(), error);
     if (!package.has_value()) {
         return nullptr;
     }
@@ -246,6 +247,7 @@ RuntimeDiagnostics WhisperCppTranscriber::diagnosticsStatic()
 {
     return RuntimeDiagnostics{
         .backendName = backendNameStatic(),
+        .selectionReason = QStringLiteral("Legacy whisper runtime selected explicitly"),
         .runtimeDescription = describeRegisteredBackends(),
         .loadedModelDescription = {},
     };
@@ -432,7 +434,9 @@ public:
 
     [[nodiscard]] RuntimeDiagnostics diagnostics() const override
     {
-        return WhisperCppTranscriber::diagnosticsStatic();
+        RuntimeDiagnostics diagnostics = WhisperCppTranscriber::diagnosticsStatic();
+        diagnostics.selectionReason = selectRuntimeForConfig(m_config).reason;
+        return diagnostics;
     }
 
     [[nodiscard]] std::shared_ptr<const TranscriptionModelHandle> loadModel(RuntimeError *error) const override
