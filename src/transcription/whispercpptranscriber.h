@@ -43,7 +43,7 @@ public:
      * @return Session on success, otherwise `nullptr` when the model is not a whisper handle.
      */
     [[nodiscard]] static std::unique_ptr<TranscriptionSession>
-    createSession(TranscriberConfig config, std::shared_ptr<const TranscriptionModelHandle> model);
+    createSession(const TranscriberConfig &config, std::shared_ptr<const TranscriptionModelHandle> model);
 
     /**
      * @brief Creates a mutable session from a loaded model handle.

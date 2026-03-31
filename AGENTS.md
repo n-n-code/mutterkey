@@ -1,95 +1,103 @@
 # AGENTS.md
 
-## Project Overview
+## Overview
 
 `Mutterkey` is a native `C++ + Qt 6` push-to-talk transcription tool for `KDE Plasma`.
 
-Current architecture:
+Current product shape:
 
-- Global shortcut handling goes through `KGlobalAccel`
+- Global shortcut handling uses `KGlobalAccel`
 - Audio capture uses Qt Multimedia
-- Transcription goes through an app-owned runtime seam with explicit runtime
-  selection
-- A product-owned native CPU reference runtime scaffold now exists alongside
-  the legacy whisper adapter
-- `whisper.cpp` is still the only real end-user speech decoder today, but the
-  vendored runtime is now optional at build time through
-  `MUTTERKEY_ENABLE_LEGACY_WHISPER=OFF`
-- Native Mutterkey model packages are now the canonical model artifact; raw
-  whisper.cpp-compatible `.bin` files remain only as a migration/import path
-- The public runtime seam is streaming-first through app-owned chunks, events, and compatibility helpers
-- Static backend support lives in `BackendCapabilities`, while runtime/device/model inspection lives in `RuntimeDiagnostics`
 - Clipboard writes prefer `KSystemClipboard` with `QClipboard` fallback
-- There is an early Qt Widgets tray shell in `mutterkey-tray`, but the daemon remains the product core
-- The recommended day-to-day runtime path is the `systemd --user` service
-- The installed desktop entry is intentionally hidden from normal app menus with `NoDisplay=true`
-- `daemon` is the default runtime mode; `once` and `diagnose` are validation helpers
+- The public runtime seam is app-owned and streaming-first:
+  `TranscriptionEngine`, `TranscriptionSession`, `AudioChunk`,
+  `TranscriptEvent`, `TranscriptUpdate`, `BackendCapabilities`,
+  `RuntimeDiagnostics`, and `RuntimeError`
+- Native Mutterkey model packages are the canonical artifact
+- Raw whisper.cpp-compatible `.bin` files remain only as migration/import input
+- A native CPU runtime path now exists with decoder-oriented execution metadata
+  (`mkasr-v2`), app-owned session/search/tokenizer/timestamp helper seams, and
+  explicit legacy native fixture compatibility (`mkasr-v1`)
+- The native CPU path now has a real tensor-backed decoder (`RealDecoderV3`)
+  with product-owned mel spectrogram, encoder, decoder with KV cache, and
+  greedy search; end-to-end validation with real model weights is pending;
+  `whisper.cpp` remains the only validated user-facing speech decoder today
+- Vendored `whisper.cpp` is optional at build time through
+  `MUTTERKEY_ENABLE_LEGACY_WHISPER=OFF`
+- `daemon` is the normal runtime mode; `once` and `diagnose` are validation
+  helpers
+- `mutterkey-tray` exists as an early tray shell, but the daemon remains the
+  product core
+- The recommended day-to-day path is the `systemd --user` service
+- The installed desktop entry stays hidden from normal app menus with
+  `NoDisplay=true`
 
-This repository is intentionally kept minimal:
+Repository principles:
 
 - CMake is the only supported build system
-- `whisper.cpp` remains a vendored legacy backend, but new runtime ownership
-  work should prefer the product-owned native CPU path and selector/model-loader
-  seams first
-- Keep the repo free of generated build output
-- Keep publication-facing files free of machine-specific paths and broken local links
-- Do not reintroduce legacy qmake or external-command transcription paths unless explicitly requested
+- Repo-owned code targets `C++23`; do not reintroduce `C++20` assumptions in
+  app-owned build, docs, or guidance
+- Keep repo-owned work KDE-first, local-only, and CLI/service-first
+- Prefer product-owned runtime, package, selector, and native-loader seams over
+  widening backend-shaped code
+- Keep the repo free of generated build output, machine-specific paths, broken
+  local links, and committed model binaries
+- Do not reintroduce qmake, external-command transcription paths, plugin
+  systems, or broad cross-platform abstractions unless explicitly requested
 
-## Repository Layout
+## Key Paths
 
 - `src/main.cpp`: CLI entrypoint and mode selection
-- `src/service.*`: daemon lifecycle and background transcription wiring
-- `src/hotkeymanager.*`: KDE `KGlobalAccel` integration
-- `src/audio/audiorecorder.*`: microphone capture
-- `src/audio/recording.h`: shared recorded-audio payload passed between the recorder, service, tests, and transcription path
-- `src/clipboardwriter.*`: clipboard integration, preferring KDE system clipboard support
-- `src/audio/recordingnormalizer.*`: conversion to runtime-ready mono `float32` at `16 kHz`
-- `src/transcription/audiochunker.*`: deterministic chunking of normalized audio for the streaming runtime path
-- `src/transcription/cpureferencemodel.*`: product-owned native CPU reference model header/parser and immutable model-handle loading
-- `src/transcription/cpureferencetranscriber.*`: native CPU reference runtime scaffold behind the app-owned engine/session seam
-- `src/transcription/modelpackage.*`: product-owned manifest and validated package value types
-- `src/transcription/modelvalidator.*`: package integrity, compatibility, and bounds validation
-- `src/transcription/modelcatalog.*`: model artifact inspection and resolution
-- `src/transcription/rawwhisperprobe.*`: lightweight raw whisper.cpp header inspection used for migration compatibility
-- `src/transcription/rawwhisperimporter.*`: import path from raw Whisper `.bin` files into native Mutterkey packages
-- `src/transcription/runtimeselector.*`: app-owned runtime-selection policy and diagnostic reasoning
-- `src/transcription/transcriptassembler.*`: final transcript assembly from streaming transcript events
-- `src/transcription/transcriptioncompat.*`: compatibility wrapper that routes one-shot recordings through the streaming runtime seam
-- `src/transcription/whispercpptranscriber.*`: in-process Whisper integration and whisper-specific engine construction
-- `src/transcription/transcriptionengine.*`: app-owned engine/session seam for backend selection and future runtime evolution; the engine owns immutable capability metadata and separate runtime diagnostics
-- `src/transcription/transcriptionworker.*`: worker object hosted on a dedicated `QThread`
-- `src/transcription/transcriptiontypes.h`: runtime diagnostics, normalized audio, typed runtime error, chunk, event, and capability value types
-- `src/config.*`: JSON config loading and defaults
-- `src/app/*`: shared CLI/runtime command helpers used by the main entrypoint
-- `src/control/*`: local daemon control transport, typed snapshots, and session/client APIs
-- `src/tray/*`: Qt Widgets tray-shell UI scaffolding
-- `contrib/mutterkey.service`: example user service
-- `contrib/org.mutterkey.mutterkey.desktop`: hidden desktop entry used for desktop identity/integration
-- `scripts/check-release-hygiene.sh`: repo hygiene checks for publication-facing content
-- `scripts/check-test-commentary.sh`: validates `WHAT/HOW/WHY` commentary blocks in repo-owned Qt tests
-- `next_feature/`: tracked upcoming feature plans as Markdown; keep only plan `.md` files and the folder-local `.gitignore`
-- `docs/Doxyfile.in`: Doxygen config template for repo-owned API docs
-- `docs/mainpage.md`: Doxygen landing page used instead of the full README
-- `scripts/run-valgrind.sh`: deterministic Valgrind Memcheck runner for release-readiness checks
-- `scripts/update-whisper.sh`: `git subtree` helper for updating vendored `whisper.cpp`
-- `.github/workflows/ci.yml`: Linux configure/build/test and hygiene CI
-- `.github/workflows/release-checks.yml`: release-scoped debug build, tests, and Valgrind Memcheck workflow
-- `LICENSE`: root MIT license for repo-owned source
-- `THIRD_PARTY_NOTICES.md`: third-party licensing/provenance notes
-- `third_party/whisper.cpp.UPSTREAM.md`: recorded metadata for the current vendored `whisper.cpp` snapshot
-- `third_party/whisper.cpp`: vendored dependency; avoid editing unless the task is specifically about the dependency
+- `src/service.*`: daemon lifecycle and transcription wiring
+- `src/app/*`: shared CLI/runtime command helpers
+- `src/control/*`: local daemon control transport and typed snapshots
+- `src/tray/*`, `src/traymain.cpp`: early tray-shell UI
+- `src/audio/*`: recorder, recording payload, normalization
+- `src/transcription/transcriptionengine.*`: app-owned engine/session seam
+- `src/transcription/transcriptiontypes.h`: core runtime value types
+- `src/transcription/runtimeselector.*`: runtime-selection policy and reasons
+- `src/transcription/cpureferencemodel.*`: native model parsing/loading
+- `src/transcription/cpureferencetranscriber.*`: native CPU reference runtime
+- `src/transcription/cpusessionstate.*`, `cputimestamps.*`: native session
+  state and transcript timestamp helpers
+- `src/transcription/cputensor.*`: product-owned 2D tensor type and operations
+  for the native CPU runtime
+- `src/transcription/cpumelspectrogram.*`: log-mel spectrogram frontend (FFT,
+  Hann window, mel filterbank)
+- `src/transcription/cpumodelweights.*`: MKCPUR3 tensor format loader and
+  encoder/decoder weight structures
+- `src/transcription/cpuencoderforward.*`: transformer encoder forward pass
+- `src/transcription/cpudecoderforward.*`: transformer decoder forward pass
+  with incremental KV cache
+- `src/transcription/cpugreedysearch.*`: greedy argmax token generation loop
+- `src/transcription/cputokenizer.*`, `cputokensearch.*`,
+  `cpudecodergraph.*`, `cpufeatureextractor.*`: staged native decoder helper
+  modules
+- `src/transcription/whispercpptranscriber.*`: vendored whisper adapter
+- `src/transcription/modelpackage.*`, `modelvalidator.*`, `modelcatalog.*`:
+  package contract, validation, artifact inspection
+- `src/transcription/rawwhisperprobe.*`, `rawwhisperimporter.*`: raw-file
+  migration path
+- `src/transcription/audiochunker.*`, `transcriptassembler.*`,
+  `transcriptioncompat.*`, `transcriptionworker.*`: streaming helpers,
+  compatibility path, worker-thread orchestration
+- `src/config.*`: JSON config loading/defaults
+- `tests/*`: deterministic Qt Test / `CTest` coverage
+- `contrib/mutterkey.service`, `contrib/org.mutterkey.mutterkey.desktop`:
+  shipped service/desktop assets
+- `docs/mainpage.md`, `docs/Doxyfile.in`: repo-owned API docs inputs
+- `scripts/check-test-commentary.sh`, `scripts/check-release-hygiene.sh`,
+  `scripts/run-valgrind.sh`, `scripts/update-whisper.sh`
+- `next_feature/`: tracked feature plans as Markdown only
+- `third_party/whisper.cpp`: vendored dependency
+- `third_party/whisper.cpp.UPSTREAM.md`: vendor provenance notes
 
-## Build Commands
+## Build And Validation
 
-Before answering build/setup questions or changing build behavior, read the `Overview`, `Quick Start`, `Run As Service`, and `Development` sections in `README.md`.
+Read `README.md` first, especially `Overview`, `Quick Start`, `Run As Service`,
+and `Development`, before changing build/setup behavior.
 
-Use an out-of-tree build directory outside the repo root when possible so the working tree stays clean.
-
-Prefer `-G Ninja` when it is available so local builds match CI more closely.
-If `ninja-build` is not installed, omit `-G Ninja` and let CMake use the
-system default generator.
-
-Example:
+Use an out-of-tree build when possible:
 
 ```bash
 BUILD_DIR="$(mktemp -d /tmp/mutterkey-build-XXXXXX)"
@@ -97,188 +105,196 @@ cmake -S . -B "$BUILD_DIR" -G Ninja
 cmake --build "$BUILD_DIR" -j"$(nproc)"
 ```
 
-To validate the native-runtime-only path without vendored `whisper.cpp` /
-`ggml`, configure with:
+If `ninja-build` is unavailable, omit `-G Ninja`.
+
+Validate no-legacy runtime paths with:
 
 ```bash
 cmake -S . -B "$BUILD_DIR" -G Ninja -DMUTTERKEY_ENABLE_LEGACY_WHISPER=OFF
 ```
 
-If a sandboxed build fails with `ccache: error: Read-only file system`, treat
-that as an environment limitation rather than a repo regression and rerun the
-build with `CCACHE_DISABLE=1`.
+If a sandboxed build hits `ccache: error: Read-only file system`, rerun with
+`CCACHE_DISABLE=1`. If vendored `ggml` still routes through its own cache
+logic, reconfigure with `GGML_CCACHE=OFF`. Treat those as environment limits,
+not repo regressions.
 
-If a sandboxed build still routes through vendored `ggml`'s own `ccache`
-detection, also reconfigure with `GGML_CCACHE=OFF` before concluding the repo is
-broken.
+Lightweight default validation:
 
-If the task affects install layout, licensing, or packaging, also validate a temporary install prefix:
+```bash
+QT_QPA_PLATFORM=offscreen "$BUILD_DIR/mutterkey" --help
+```
+
+Add this when startup, config, or service wiring changes:
+
+```bash
+QT_QPA_PLATFORM=offscreen "$BUILD_DIR/mutterkey" diagnose 1
+```
+
+Use the smallest validation set that proves the change, then extend as needed:
+
+- `ctest --test-dir "$BUILD_DIR" --output-on-failure` for covered code
+- `cmake --build "$BUILD_DIR" --target clang-tidy` for non-trivial C++ changes
+- `cmake --build "$BUILD_DIR" --target clazy` for Qt-heavy changes when
+  available
+- `cmake --build "$BUILD_DIR" --target lint` for the full analyzer pass
+- `cmake --build "$BUILD_DIR" --target docs` when touching repo-owned public
+  headers, Doxygen comments, `docs/mainpage.md`, or docs/CI wiring
+- `bash scripts/run-valgrind.sh "$BUILD_DIR"` for memory, lifetime, shutdown,
+  or release-hardening work
+- `bash scripts/check-release-hygiene.sh` for publication-facing files,
+  repository metadata, or helper scripts
+
+If install layout, licensing, or shipped assets change, validate a temporary
+install prefix:
 
 ```bash
 INSTALL_DIR="$(mktemp -d /tmp/mutterkey-install-XXXXXX)"
 cmake --install "$BUILD_DIR" --prefix "$INSTALL_DIR"
 ```
 
-If you need a stable local build directory for iteration, use `build/`, but remove it before finishing unless the user explicitly asks to keep it.
+Check installed license files under `share/licenses/mutterkey`.
 
-## Validation Commands
+## Testing Rules
 
-Preferred lightweight validation after code changes:
+- Keep repo-owned Qt tests deterministic and headless under `CTest`
+- For Qt GUI/Widgets tests, set `QT_QPA_PLATFORM=offscreen` in test
+  registration or test properties, not only in the caller environment
+- Keep `WHAT/HOW/WHY` commentary near the start of real repo-owned test bodies;
+  `scripts/check-test-commentary.sh` and
+  `scripts/check-release-hygiene.sh` enforce that contract
+- Prefer fake/injected engines for orchestration tests and fake sessions for
+  narrow worker behavior
+- Prefer pure tests around parsing, normalization, chunking, transcript
+  assembly, compatibility wrappers, control payloads, and small helper seams
+  before adding session-, device-, KDE-, clipboard-, or microphone-heavy tests
+- For recorder, clipboard, hotkey, or other boundary-heavy code, extract narrow
+  pure seams before trying to mock the full desktop/runtime environment
+- Keep `daemoncontrolclientservertest` under normal `ctest`, but do not assume
+  it is a good direct-launch Memcheck target in restricted sandboxes; some
+  environments block direct `AF_UNIX` bind/listen with `EPERM`
 
-```bash
-QT_QPA_PLATFORM=offscreen "$BUILD_DIR/mutterkey" --help
-```
+## Coding Guidance
 
-If the change affects startup, config, or wiring, also run:
+- Keep changes targeted; do not reformat unrelated code
+- Prefer small direct classes and explicit ownership/lifetime over broad
+  abstraction layers
+- Keep Qt usage idiomatic: explicit `QObject` ownership, signals/slots, and
+  `QThread` boundaries
+- Prefer anonymous-namespace `Q_LOGGING_CATEGORY` for file-local logging
+  categories; avoid `Q_STATIC_LOGGING_CATEGORY`
+- Keep Qt class section structure valid for `moc`; do not flatten `signals`,
+  `slots`, or `Q_SLOTS` sections just to satisfy generic style advice
+- Favor `const`, `override`, `explicit`, `[[nodiscard]]`, narrow enums, RAII,
+  rule-of-zero types, and clear invariants
+- Treat raw pointers and references as non-owning observers unless ownership
+  transfer is explicit
+- Prefer standard library / Qt value types over raw arrays and manual bounds
+  handling
+- When helper functions take multiple adjacent same-shaped parameters, prefer a
+  small request struct if it improves clarity and avoids
+  `bugprone-easily-swappable-parameters`
 
-```bash
-QT_QPA_PLATFORM=offscreen "$BUILD_DIR/mutterkey" diagnose 1
-```
+Runtime- and model-specific guidance:
 
-Notes:
-
-- `once` mode requires microphone access and a valid model artifact path
-- Real transcription verification needs a configured model in `~/.config/mutterkey/config.json` or a custom config path
-- A small `Qt Test` + `CTest` suite exists for config loading, audio normalization, streaming-runtime helpers, and transcription-worker orchestration, including malformed JSON, wrong-type config inputs, recording-normalizer edge cases, and fake streaming backend behavior
-- Repo-owned test cases are expected to carry `WHAT/HOW/WHY` comments near the start of each real test body; `scripts/check-test-commentary.sh` and `scripts/check-release-hygiene.sh` enforce that convention
-- Config loading is intentionally forgiving: invalid runtime values fall back to defaults and log warnings
-- Use `ctest --test-dir "$BUILD_DIR" --output-on-failure` for changes that affect covered code
-- Keep Qt GUI or Widgets tests headless under `CTest`: set `QT_QPA_PLATFORM=offscreen` in the test registration or test properties rather than relying on the caller environment
-- Use `bash scripts/run-valgrind.sh "$BUILD_DIR"` or `cmake --build "$BUILD_DIR" --target valgrind` when validating memory behavior for release readiness or after fixing memory-lifetime issues
-- On Debian-family systems, install `libc6-dbg` if Valgrind fails at startup with a `ld-linux` / mandatory redirection error
-- The default Valgrind lane now covers the deterministic pure/headless binaries around config parsing, command dispatch, streaming helpers, control payload parsing, worker orchestration, platform helper seams, and `mutterkey --help`
-- Keep `daemoncontrolclientservertest` under normal `ctest`, but do not assume it is a good default direct-launch Memcheck target in restricted sandboxes; some environments block direct `AF_UNIX` bind/listen with `EPERM` before the code under test runs
-- Use `cmake --build "$BUILD_DIR" --target clang-tidy` after C++ changes when static-analysis noise is likely to matter
-- Use `cmake --build "$BUILD_DIR" --target clazy` after Qt-facing changes when `clazy-standalone` is available
-- Use `cmake --build "$BUILD_DIR" --target lint` when you want the repo's full static-analysis pass in one command
-- Use `bash scripts/check-release-hygiene.sh` when touching publication-facing files such as `README.md`, licenses, `contrib/`, CI, or helper scripts
-- Use `cmake --build "$BUILD_DIR" --target docs` when touching repo-owned public headers, Doxygen config, the Doxygen main page, or CI/docs wiring
-- If install rules or licensing files change, confirm the temporary install contains the expected files under `share/licenses/mutterkey`
-- If a task changes runtime selection, native model loading, or legacy-whisper
-  build toggles, validate at least one `MUTTERKEY_ENABLE_LEGACY_WHISPER=OFF`
-  build in addition to the normal default build
-- If you add or change public methods in repo-owned headers, expect `cmake --build "$BUILD_DIR" --target docs` to fail until the new API is documented; treat that as part of the normal implementation loop, not follow-up polish
-- Newly added repo-owned public structs and free functions in public headers also
-  need Doxygen comments immediately; the `docs` target treats undocumented new
-  API surface as a real failure, not optional cleanup
-
-## Tooling Best Practices
-
-- Treat `clang-tidy` and `clazy` as repo-maintained checks, not optional extras; if a change introduces new warnings in repo-owned code, fix them or explain why they are being deferred
-- The repo-owned `clang-tidy` path is intentionally strict and now relies on `.clang-tidy` `RemovedArgs` support for `-mno-direct-extern-access` instead of rewriting `compile_commands.json`; prefer extending that config rather than adding more build-dir munging
-- Prefer `cmake --build "$BUILD_DIR" --target clang-tidy` in a real configured build tree when validating analyzer changes, because Qt test sources depend on generated `*_autogen` / `.moc` outputs that ad hoc one-off `clang-tidy` calls may not have available
-- Treat Valgrind Memcheck as the release memory gate and ASan/UBSan as the faster developer complements; they overlap, but they are not interchangeable
-- Prefer using the repo-owned Valgrind runner instead of ad hoc Memcheck commands so `--read-var-info=yes`, leak policy, and the deterministic test selection stay aligned
-- Treat the release-hygiene script and GitHub CI workflow as repo-maintained checks too; keep them passing when build inputs, docs, or repository metadata change
-- Treat the Doxygen `docs` target as a repo-maintained check too when touching repo-owned API docs or docs/CI wiring; repo-owned Doxygen warnings should be fixed rather than ignored
-- Keep the default Valgrind lane deterministic and headless: prefer the pure/configuration/control/runtime-helper tests plus `mutterkey --help` over microphone, clipboard-heavy, tray, KGlobalAccel-heavy, or direct local-socket integration paths unless the task is specifically about those integrations
-- The release-hygiene script intentionally ignores generated build trees while scanning for machine-specific home-directory paths and absolute Markdown links, then reports generated-artifact roots separately; if it flags `./build`, remove the repo-local build directory rather than weakening the content checks
-- Keep the Doxygen main page in `docs/mainpage.md` small and API-focused. The release-facing `README.md` may link to files outside the Doxygen input set and should not be used as the Doxygen main page unless the input set is expanded deliberately
-- Keep analyzer fixes targeted to `src/` and `tests/`; do not churn `third_party/` or generated Qt autogen output to satisfy tooling
-- Reconfigure the build directory after installing new tools so cached `find_program()` results are refreshed
-- When validating inside a restricted sandbox, be ready to disable `ccache` with `CCACHE_DISABLE=1` if the cache location is read-only; that is an execution-environment issue, not a Mutterkey build failure
-- Prefer fixing the code over weakening `.clang-tidy` or the Clazy check set; only relax tool config when the warning is clearly low-value for this repo
-- If `clang-tidy` flags a new small enum for `performance-enum-size`, prefer an explicit narrow underlying type such as `std::uint8_t` instead of suppressing the warning
-- If `clang-tidy` flags a small fixed binary header type, prefer
-  `std::array<std::byte, N>` or `std::array<char, N>` plus value
-  initialization over C-style arrays
-- When helper functions take two adjacent same-shaped parameters such as two
-  `QString` values, prefer a small request struct when that keeps tests and
-  runtime code from tripping `bugprone-easily-swappable-parameters`
-- In this Qt-heavy repo, treat `misc-include-cleaner` and `readability-redundant-access-specifiers` as low-value `clang-tidy` noise unless the underlying tool behavior improves; they conflict with Qt header-provider reality and `signals` / `slots` / `Q_SLOTS` sectioning more than they improve safety
-- Prefer anonymous-namespace `Q_LOGGING_CATEGORY` for file-local logging categories; `Q_STATIC_LOGGING_CATEGORY` is not portable enough across the Qt versions this repo may build against
-- Do not add broad Valgrind suppressions by default; only add narrow suppressions after reproducing stable third-party noise and keep them clearly scoped
-- When adding tests, prefer small `Qt Test` cases that run headlessly under `CTest` and avoid microphone, clipboard, or KDE session dependencies unless the task is specifically integration-focused
-- For tool-driven cleanups, preserve the existing design and behavior; do not perform broad rewrites just to satisfy style-oriented recommendations
-- Keep forward-looking feature plans under `next_feature/` as tracked Markdown files; do not leave scratch notes, binaries, or generated artifacts there
-
-## Coding Guidelines
-
-- Stay within the existing style and structure; do not reformat unrelated code
-- Prefer small, direct classes over adding abstraction layers without a concrete need
-- Keep Qt usage idiomatic: `QObject` ownership, signal/slot wiring, and `QThread` boundaries should remain explicit
-- Prefer anonymous-namespace `Q_LOGGING_CATEGORY` for translation-unit-local logging categories when no cross-file declaration is needed; keep the pattern compatible with older Qt builds used in CI
-- When refactoring Qt class declarations, remember that `moc` still cares about section structure: keep explicit `signals`, `slots`, `Q_SLOTS`, and access sections valid for Qt even if a generic style check suggests flattening them
-- Prefer explicit validation and safe fallback behavior for config-driven runtime values
-- Avoid introducing optional backends, plugin systems, or cross-platform abstractions unless the task requires them
-- Keep the audio path explicit: recorder output may not already match Whisper input requirements, so preserve normalization behavior
-- Prefer product-owned naming such as runtime audio, chunks, events, diagnostics, and compatibility wrappers over backend-shaped naming when touching app-owned code
-- Prefer product-owned model terminology too: package, manifest, catalog, metadata,
-  compatibility marker, and model artifact path are the primary nouns now;
-  reserve backend-shaped wording for the whisper adapter or raw-file migration path
-- Prefer narrow shared value types across subsystems; for example, consumers that only need captured audio should include `src/audio/recording.h`, not the full recorder class
-- Keep JSON and other transport details at subsystem boundaries; prefer typed C++ snapshots/results once data crosses into app-owned control, tray, or service code
-- Prefer dependency injection for tray-shell and control-surface code from the first implementation so headless Qt tests stay simple
-- When preparing the transcription path for future runtime work, prefer app-owned engine/session seams and injected sessions over leaking concrete backend types into CLI, service, or worker orchestration. Keep immutable capability reporting on the engine side, keep runtime inspection data in `RuntimeDiagnostics`, and keep the session side focused on mutable decode state, warmup, chunk ingestion, finish, and cancellation
-- Prefer product-owned runtime interfaces, model/session separation, explicit
-  runtime-selection policy, and deterministic backend selection before adding
-  new inference backends or widening cross-platform support
-- Keep runtime-selection policy in `src/transcription/runtimeselector.*`
-  instead of burying compatibility/fallback rules inside
-  `createTranscriptionEngine()`
-- Keep native model-format parsing and immutable model loading in
+- Keep runtime-selection policy in `src/transcription/runtimeselector.*`, not
+  buried in `createTranscriptionEngine()`
+- Keep static backend support in `BackendCapabilities` and runtime/device/model
+  inspection in `RuntimeDiagnostics`
+- Keep `TranscriptionSession` focused on mutable behavior such as warmup, chunk
+  ingestion, finish, and cancellation
+- Keep native model parsing/loading separate from mutable session state; prefer
   `src/transcription/cpureferencemodel.*` or similar app-owned loader code
-  rather than mixing artifact parsing into the mutable session implementation
-- Keep model validation, metadata extraction, and compatibility checks app-owned.
-  `whisper.cpp` should not be the first component that tells Mutterkey whether a
-  model artifact is obviously malformed, incompatible, or oversized
-- Keep compatibility shims explicit in naming. If a one-shot daemon/CLI path is implemented on top of the streaming runtime seam, name it as a compatibility wrapper rather than making the old one-shot shape look like the primary contract
-- Keep backend-specific validation out of `src/config.*` when practical. Product config parsing should normalize and preserve user input, while backend support checks should live in the app-owned runtime layer near `src/transcription/*`
-- Preserve the current product direction: embedded `whisper.cpp`, KDE-first, CLI/service-first
+- Keep decoder-facing execution metadata in the package contract rather than
+  overloading `ModelMetadata`; prefer `manifest.nativeExecution` for native
+  decoder/search/frontend/timestamp invariants
+- Treat `mkasr-v2` as the decoder-oriented native package contract and
+  `mkasr-v1` as explicit legacy native-fixture compatibility; do not blur those
+  meanings in selection or validation logic
+- Keep package validation, metadata extraction, and compatibility checks
+  app-owned; `whisper.cpp` should not be the first place that reports malformed
+  or incompatible artifacts
+- For ongoing Phase 5B work, prefer extracting more native decoder-owned seams
+  before widening the transcriber adapter. The target flow is
+  model loader -> frontend -> tokenizer/search -> timestamping -> session
+  adapter, not one large `cpureferencetranscriber.cpp`
+- Keep backend-specific validation out of `src/config.*` when practical.
+  Product config should normalize input and apply defaults; backend support
+  checks belong in app-owned runtime code
+- Keep compatibility shims explicit in naming. One-shot daemon/CLI behavior
+  implemented on the streaming seam should stay clearly identified as a
+  compatibility path
+- Use product-owned terminology in app-owned code: runtime audio, chunks,
+  events, diagnostics, packages, manifests, metadata, compatibility markers,
+  model artifact path
+- Reserve backend-shaped wording for the whisper adapter and raw-file migration
+  path
 
-## C++ Core Guidelines Priorities
+## Tooling Guidance
 
-Apply the C++ Core Guidelines selectively and pragmatically. For this repo, the highest-value rules are ownership, lifetime, invariants, initialization, and type-safe interfaces.
+- Treat `clang-tidy`, `clazy`, Doxygen, the hygiene scripts, and CI workflow
+  expectations as maintained checks, not optional extras
+- Prefer the repo-owned `clang-tidy` target from a real configured build tree so
+  Qt test `*_autogen` / `.moc` outputs exist
+- `clang-tidy` should only be run on files present in the active build's
+  `compile_commands.json`; conditionally built sources such as the legacy
+  whisper adapter need a matching configured build or should be skipped
+- When touching `src/transcription/whispercpptranscriber.*` or
+  `tests/whispercpptranscribertest.cpp`, prefer validating analyzer behavior
+  from a legacy-enabled build tree so vendored include paths and generated test
+  MOC files are available
+- Keep analyzer fixes targeted to `src/` and `tests/`; do not churn
+  `third_party/` or generated Qt output
+- Prefer fixing code over weakening `.clang-tidy` or Clazy config
+- In this Qt-heavy repo, treat `misc-include-cleaner` and
+  `readability-redundant-access-specifiers` as low-value `clang-tidy` noise
+  unless the tool behavior improves
+- If `clang-tidy` flags a new small enum for `performance-enum-size`, prefer an
+  explicit narrow underlying type such as `std::uint8_t`
+- If it flags a small binary header type, prefer
+  `std::array<std::byte, N>` or `std::array<char, N>` with value
+  initialization over C-style arrays
+- Prefer the repo-owned Valgrind runner over ad hoc Memcheck commands so leak
+  policy and deterministic target selection stay aligned
+- Keep the default Valgrind lane deterministic and headless
+- Do not add broad Valgrind suppressions by default; keep any needed
+  suppressions narrow and stable
 
-- Prefer code that expresses intent directly and keeps interfaces simple; hide low-level Qt, audio, and `whisper.cpp` details behind small, explicit types and helper functions
-- Favor static type safety and compile-time checking over comments or conventions: use `const`, `override`, `explicit`, `enum class`, `[[nodiscard]]`, and narrow types when they clarify behavior
-- Treat raw pointers and references as non-owning observers; never transfer ownership through `T*` or `T&`. Use `std::unique_ptr` or another explicit owner only when ownership really must move
-- For ordinary function parameters, prefer `T*` or `T&` over smart pointers unless the callee is participating in ownership or lifetime management
-- Use RAII consistently for every owned resource and cleanup path: memory, worker-thread lifetime, temporary state transitions, and any future locks or file handles. Avoid naked `new`/`delete` and manual `lock()`/`unlock()`
-- Prefer the rule of zero. If a type must manage a resource directly and cannot rely on member types with correct behavior, define or `=delete` the full copy/move/destructor set deliberately
-- Always initialize objects and members. Prefer constructor member initializers, default member initializers, and creating objects in the narrowest useful scope
-- Preserve clear class invariants and valid states across startup, shutdown, and error paths; after a failed operation, objects should remain usable or fail in an obvious, contained way
-- Prefer immutable data after construction where practical, especially for config snapshots, recordings passed across threads, and transcription results
-- Prefer standard library and Qt container/value types over raw arrays, manual memory management, and ad hoc bounds handling. Keep indexing and buffer conversions explicit and bounds-safe
-- When touching older code, move it toward these rules incrementally; do not force broad rewrites unless the task is specifically a modernization pass
+## Dependencies And Release Rules
 
-## Dependency Guidance
-
-- Treat `third_party/whisper.cpp` as vendored source
-- The current vendored snapshot and provenance notes are tracked in `third_party/whisper.cpp.UPSTREAM.md`
-- Prefer `bash scripts/update-whisper.sh <upstream-tag-or-commit>` for future `whisper.cpp` updates from a real Git work tree
-- `scripts/update-whisper.sh` requires a clean Git work tree before it will fetch or run subtree operations
-- Treat `third_party/whisper.cpp` as subtree-managed vendor content and update it through the helper script rather than manual directory replacement
-- Prefer changing app-side integration code before patching vendored dependency code
-- Prefer resolving model-package, metadata, and import work entirely in app-owned
-  code. Raw whisper.cpp `.bin` support is now a compatibility/import concern, not
-  the canonical product contract
-- Prefer treating `whisper.cpp` as a legacy migration/parity dependency from
-  here forward. If new work can land in app-owned selector, model-loader,
-  native-runtime, or package code instead, do that first
-- Prefer keeping fake runtime tests and app-owned helpers free of vendored whisper linkage unless the test is specifically about the whisper adapter or engine factory
-- Prefer fixing vendored target metadata from the top-level CMake when the issue is Mutterkey packaging or warning noise, instead of patching upstream vendored files directly
-- If you must modify vendored code, document why in the final response and record the deviation in `third_party/whisper.cpp.UPSTREAM.md`
-- Do not restore the removed upstream examples/tests/scripts unless the task requires them
-
-## Release And Licensing
+- Treat `third_party/whisper.cpp` as vendored subtree-managed source
+- Keep repo-owned `C++23` requirements separate from vendored
+  `whisper.cpp` / `ggml` language settings unless a vendor task explicitly
+  requires boundary changes
+- Prefer app-side integration changes before touching vendored code
+- Prefer `bash scripts/update-whisper.sh <tag-or-commit>` for vendor updates
+  from a clean Git work tree
+- Do not restore removed upstream examples/tests/scripts unless explicitly
+  required
+- If vendored code changes, document why and update
+  `third_party/whisper.cpp.UPSTREAM.md`
+- Prefer fixing vendored target metadata from top-level CMake when the issue is
+  packaging or warning noise
 
 - Repo-owned source is MIT-licensed in `LICENSE`
-- Third-party licensing and provenance notes live in `THIRD_PARTY_NOTICES.md`
-- `whisper.cpp` model files are not bundled; do not add model binaries to the repository
-- Native Mutterkey model packages also must not be committed to the repository;
-  if a release needs to ship one, include it only in the release artifact or as a
+- Third-party licensing and provenance notes live in
+  `THIRD_PARTY_NOTICES.md`
+- Do not commit raw Whisper `.bin` files, `.gguf` files, or native Mutterkey
+  model packages
+- If a release needs a model, include it only in the release artifact or as a
   separate release asset outside Git
-- Do not introduce machine-specific home-directory paths, absolute local Markdown links, or generated build artifacts into tracked files
-- If a task changes install layout or shipped assets, keep the CMake install rules and license installs aligned with the new behavior
-- If a task changes whether legacy whisper support is installed, keep
-  `README.md`, `RELEASE_CHECKLIST.md`, `docs/mainpage.md`, install rules, and
-  license installs aligned with that choice
-- The installed shared-library payload is runtime-focused; do not start installing vendored upstream public headers unless the package contract intentionally changes
+- Keep publication-facing files free of machine-specific home-directory paths,
+  broken links, and generated output
+- If install layout or shipped assets change, keep CMake install rules, README,
+  `RELEASE_CHECKLIST.md`, service/desktop assets, and license installs aligned
+- If legacy whisper install behavior changes, keep `README.md`,
+  `RELEASE_CHECKLIST.md`, `docs/mainpage.md`, install rules, and license
+  installs aligned
+- Do not start installing vendored upstream public headers unless the package
+  contract intentionally changes
 
 ## Config Expectations
 
-Important runtime config fields live under `transcriber`:
+Important `transcriber` fields:
 
 - `model_path`
 - `language`
@@ -298,52 +314,54 @@ Typical model location:
 ~/.local/share/mutterkey/models/<package-id>
 ```
 
-Current `transcriber.model_path` semantics:
+`transcriber.model_path` semantics:
 
-- package directory is the canonical target
-- `model.json` manifest path is also accepted
-- raw whisper.cpp-compatible `.bin` files are accepted only as a migration
-  compatibility path
+- package directory is canonical
+- `model.json` manifest path is accepted
+- raw whisper.cpp-compatible `.bin` files are migration compatibility only
 
 ## Agent Workflow
 
-- Read `README.md` first, especially `Overview`, `Quick Start`, `Run As Service`, and `Development`, then read the touched source files before editing
+- Read `README.md` first, then the touched files before editing
 - Prefer targeted changes over speculative cleanup
-- If a change grows daemon, tray, or control-plane behavior, prefer extracting or extending repo-owned libraries under `src/app/`, `src/control/`, or other focused modules instead of piling more orchestration into `src/main.cpp`
+- If daemon, tray, or control behavior grows, prefer extracting focused
+  repo-owned modules under `src/app/`, `src/control/`, or similar instead of
+  piling more orchestration into `src/main.cpp`
 - Update `README.md` and `config.example.json` when behavior or setup changes
-- Update `RELEASE_CHECKLIST.md` too when release-facing model packaging, shipped
-  assets, or release-bundle guidance changes
-- Update `contrib/mutterkey.service` and `contrib/org.mutterkey.mutterkey.desktop` when service/desktop behavior changes
-- Update `LICENSE`, `THIRD_PARTY_NOTICES.md`, CMake install rules, and `third_party/whisper.cpp.UPSTREAM.md` when packaging, licensing, or vendored dependency behavior changes
-- Keep `README.md`, `AGENTS.md`, and any relevant local skills aligned with the current `scripts/update-whisper.sh` workflow when the vendor-update process changes
-- Store upcoming feature plans in `next_feature/` as Markdown files, and update the existing plan there when refining the same upcoming feature instead of scattering notes across the repo
-- Keep architecture-evolution plans grounded in incremental slices that preserve the current shipped `whisper.cpp` path while moving ownership of interfaces, tests, and packaging toward repo-owned code
-- Treat `mutterkey-tray` as a shipped artifact once it is installed or validated in CI; keep install rules, README/setup notes, release checklist items, and workflow checks aligned with that status
-- Verify with a fresh CMake build when the change affects compilation or linkage
-- Run `ctest` when touching covered code in `src/config.*` or `src/audio/recordingnormalizer.*`, and extend the deterministic headless tests when practical
-- When adding or refreshing repo-owned Qt tests, keep the `WHAT/HOW/WHY` commentary current; treat `scripts/check-test-commentary.sh` as part of the maintained test contract, not optional polish
-- When touching transcription orchestration or backend seams, prefer small headless tests with fake/injected sessions or fake engines over model-dependent integration tests. Engine injection is the preferred seam for orchestration tests; direct session injection is still useful for narrow worker behavior
-- When touching the streaming runtime seam, prefer testing chunking, transcript assembly, and compatibility-wrapper behavior in pure headless tests before adding backend-specific or environment-heavy coverage
-- When adding or fixing Qt GUI tests, make the `CTest` registration itself headless with `QT_QPA_PLATFORM=offscreen` so CI does not try to load `xcb`
-- Prefer expanding tests around pure parsing, value normalization, and other environment-independent logic before adding KDE-session or device-heavy coverage
-- For boundary-heavy code such as recorder, clipboard, or hotkey helpers, prefer extracting narrow pure helper seams for deterministic tests before trying to mock full KDE/session/device behavior
-- Use `-DMUTTERKEY_ENABLE_ASAN=ON` and `-DMUTTERKEY_ENABLE_UBSAN=ON` for fast iteration on memory and UB bugs, and use the repo-owned Valgrind lane as the slower release-focused confirmation step
-- Run `clang-tidy` and `clazy` targets for non-trivial C++/Qt changes when the tools are installed in the environment
-- If `clang-tidy` validation needs Qt test `.moc` files, generate the relevant `*_autogen` targets first or just run the repo-owned `clang-tidy` target from a configured build tree
-- Run the `docs` target when touching repo-owned public headers, Doxygen comments, `docs/Doxyfile.in`, `docs/mainpage.md`, or CI/docs wiring
-- Prefer the `lint` target for a full pre-handoff analyzer pass, and use the individual analyzer targets when iterating on one class of warnings
-- Run `bash scripts/run-valgrind.sh "$BUILD_DIR"` before handoff when the task is specifically about memory, ownership, lifetime, shutdown, or release hardening
-- Run `bash scripts/check-release-hygiene.sh` before handoff when the task touches publication-facing files or repository metadata
-- Remember that the release-hygiene script now also enforces test commentary
-  coverage and rejects tracked `.bin` / `.gguf` artifacts, so release-facing or
-  helper-script changes may need both commentary updates and binary-artifact policy checks
-- If `QT_QPA_PLATFORM=offscreen "$BUILD_DIR/mutterkey" diagnose 1` fails in a headless environment after model loading or during KDE/session-dependent startup, note that limitation explicitly rather than assuming the runtime seam or docs-only change regressed behavior
-- A headless `diagnose 1` failure after whisper model loading still does not necessarily indicate a streaming-runtime regression; separate runtime-contract changes from KDE/session or headless-environment limits
-- Do not leave generated artifacts in the repository tree at the end of the task
-- Do not assume every workspace copy is an initialized git repository; if `git` commands fail, continue with file-based validation and mention the limitation in the final response
+- Update `RELEASE_CHECKLIST.md` for release-facing packaging, assets, or bundle
+  guidance changes
+- Update `contrib/mutterkey.service` and
+  `contrib/org.mutterkey.mutterkey.desktop` when service/desktop behavior
+  changes
+- Update `LICENSE`, `THIRD_PARTY_NOTICES.md`, install rules, and
+  `third_party/whisper.cpp.UPSTREAM.md` when packaging, licensing, or vendor
+  behavior changes
+- Keep `README.md`, `AGENTS.md`, and relevant local skills aligned when the
+  repo workflow changes
+- Store forward-looking feature plans under `next_feature/` as tracked Markdown
+  files; update the existing plan rather than scattering notes
+- If a task changes the real status of a tracked phase, update the existing
+  roadmap under `next_feature/` so the recorded phase state matches the repo
+  rather than leaving stale "planned" markers behind
+- Keep architecture evolution incremental: preserve the shipped whisper path
+  while moving ownership of interfaces, tests, and packaging toward app-owned
+  code
+- Treat `mutterkey-tray` as a shipped artifact once it is installed or checked
+  in CI; keep install rules and release docs aligned
+- Validate a no-legacy build when the task affects runtime selection, native
+  model loading, or legacy-whisper toggles
+- If `diagnose 1` fails only in a headless environment after model loading or
+  during KDE/session-dependent startup, note the environment limitation instead
+  of assuming a regression
+- Do not leave generated artifacts in the repo tree
+- Do not assume the workspace is a valid Git repo; if Git commands fail,
+  continue with file-based validation and note the limitation
 
 ## When Unsure
 
 - Optimize for the current implementation, not hypothetical future backends
-- Ask before making architectural expansions beyond KDE, Qt, and embedded Whisper
+- Prefer repo-owned native/runtime/package seams before widening
+  `whisper.cpp`-shaped code
+- Ask before making architectural expansions beyond KDE, Qt, and the current
+  local transcription design
 - Keep the repo in a state that would be reasonable for a clean initial commit

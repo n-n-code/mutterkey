@@ -139,6 +139,11 @@ bool TranscriptionWorker::shouldDiscardSession(const RuntimeError &error)
     case RuntimeErrorCode::None:
     case RuntimeErrorCode::InvalidConfig:
     case RuntimeErrorCode::ModelNotFound:
+    case RuntimeErrorCode::InvalidModelPackage:
+    case RuntimeErrorCode::UnsupportedModelPackageVersion:
+    case RuntimeErrorCode::ModelIntegrityFailed:
+    case RuntimeErrorCode::IncompatibleModelPackage:
+    case RuntimeErrorCode::ModelTooLarge:
     case RuntimeErrorCode::AudioNormalizationFailed:
     case RuntimeErrorCode::UnsupportedLanguage:
         return false;

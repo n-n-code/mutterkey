@@ -14,7 +14,7 @@ Current behavior:
 
 - registers a global shortcut through `KGlobalAccel`
 - records microphone audio while the shortcut is held
-- transcribes locally through an embedded `whisper.cpp` backend
+- transcribes locally through the selected in-process runtime path
 - copies the resulting text to the clipboard
 - expects you to paste the text yourself with `Ctrl+V`
 
@@ -22,9 +22,14 @@ Current runtime shape:
 
 - `TranscriptionEngine` is the immutable runtime/provider boundary
 - `TranscriptionSession` is the mutable per-session decode boundary
+- native Mutterkey model packages are the canonical artifact
+- raw whisper.cpp-compatible `.bin` files remain only as migration/import input
 - internal audio flow is streaming-first through normalized chunks and transcript events
 - `BackendCapabilities` reports static backend support, while `RuntimeDiagnostics`
   reports runtime/device/model inspection data
+- runtime selection is owned by `RuntimeSelector`, with reasons surfaced through diagnostics
+- a product-owned native CPU runtime path exists, and `MUTTERKEY_ENABLE_LEGACY_WHISPER=OFF`
+  supports native-only builds
 - the current daemon and `once` user flows still collapse the streaming path back
   into a final clipboard-friendly transcript
 
@@ -63,7 +68,7 @@ Build requirements:
 
 1. Qt 6 development packages with `Core`, `Gui`, `Multimedia`, `Network`, and `Widgets`
 2. KDE Frameworks development packages for `KGlobalAccel` and `KGuiAddons`
-3. `g++`
+3. `g++` with C++23 support
 4. `cmake`
 
 Runtime requirements:
@@ -83,7 +88,8 @@ Optional developer tooling:
 
 The repository vendors `whisper.cpp`, but it does not bundle speech model
 artifacts. Any model file you download separately may be subject to its own
-license or usage terms.
+license or usage terms. The vendored runtime is optional at build time, while
+native Mutterkey model packages remain the preferred configured artifact.
 
 If CMake fails before compilation starts, the most common cause is missing Qt 6
 development packages for `Core`, `Gui`, `Multimedia`, or KDE Frameworks
@@ -94,7 +100,7 @@ packages for `KF6GlobalAccel` / `KF6GuiAddons`.
 Mutterkey is designed to keep transcription local to the machine:
 
 - microphone audio is captured through Qt Multimedia
-- transcription runs in-process through the vendored `whisper.cpp` backend
+- transcription runs in-process through the selected local runtime path
 - the project does not send audio or transcript text to a remote service
 
 That does not make it a hardened privacy boundary:
@@ -172,7 +178,7 @@ Notes:
 
 ### 2. Put a model on disk
 
-Preferred Phase 4 path:
+Preferred path:
 
 1. place a raw Whisper `.bin` file somewhere temporary
 2. import it into a native Mutterkey package:
@@ -187,10 +193,10 @@ This creates a package directory under:
 ~/.local/share/mutterkey/models/<package-id>/
 ```
 
-You can inspect a package or a legacy raw file with:
+You can inspect a package, a `model.json` manifest, or a legacy raw file with:
 
 ```bash
-~/.local/bin/mutterkey model inspect /path/to/ggml-base.en.bin
+~/.local/bin/mutterkey model inspect ~/.local/share/mutterkey/models/<package-id>
 ```
 
 Legacy compatibility path:
@@ -305,6 +311,7 @@ Notes:
 
 - `once` and `diagnose` require a positive duration in seconds
 - `once` also requires microphone access and a valid model path
+- `diagnose` loads the same configured runtime/model path the daemon would use
 
 ## Run As Service
 
@@ -362,6 +369,12 @@ Common failures:
 - the configured package path, manifest path, or raw compatibility artifact does not exist
 - fix `transcriber.model_path`
 
+`Raw Whisper compatibility artifact does not match the active runtime`
+
+- the configured model path points at a raw `.bin` compatibility artifact, but the active runtime selection expects a native package
+- import the raw file with `mutterkey model import ...` and update `transcriber.model_path` to the package directory or `model.json`
+- or run a legacy-whisper-enabled build if you intentionally need the raw compatibility path directly
+
 `Recorder returned no audio`
 
 - microphone capture did not produce usable PCM data
@@ -407,6 +420,9 @@ Repository layout:
 - `src/transcription/modelcatalog.*`: model artifact inspection and resolution
 - `src/transcription/rawwhisperprobe.*`: lightweight raw Whisper header inspection
 - `src/transcription/rawwhisperimporter.*`: migration path from raw Whisper files to native packages
+- `src/transcription/runtimeselector.*`: runtime-selection policy and diagnostic reasons
+- `src/transcription/cpureferencemodel.*`: native CPU model loading boundary
+- `src/transcription/cpureferencetranscriber.*`: product-owned native CPU runtime path
 - `src/transcription/whispercpptranscriber.*`: embedded Whisper integration behind the app-owned runtime seam
 - `src/transcription/transcriptionworker.*`: worker object on a dedicated `QThread`
 - `src/transcription/transcriptiontypes.h`: runtime diagnostics, normalized-audio, chunk, event, and error value types
@@ -425,8 +441,13 @@ cmake -S . -B "$BUILD_DIR" -G Ninja -DCMAKE_BUILD_TYPE=Debug
 cmake --build "$BUILD_DIR" -j"$(nproc)"
 ctest --test-dir "$BUILD_DIR" --output-on-failure
 QT_QPA_PLATFORM=offscreen "$BUILD_DIR/mutterkey" --help
-QT_QPA_PLATFORM=offscreen "$BUILD_DIR/mutterkey" diagnose 1
+DIAGNOSE_CONFIG_DIR="$(mktemp -d /tmp/mutterkey-diagnose-config-XXXXXX)"
+"$BUILD_DIR/mutterkey" --config "$DIAGNOSE_CONFIG_DIR/config.json" config init --model-path /path/to/mutterkey-model-package
+QT_QPA_PLATFORM=offscreen "$BUILD_DIR/mutterkey" --config "$DIAGNOSE_CONFIG_DIR/config.json" diagnose 1
 ```
+
+When validating `diagnose`, do not rely on your real `~/.config/mutterkey/config.json`.
+Use an explicit temporary config and model path so the result is deterministic.
 
 Static analysis:
 

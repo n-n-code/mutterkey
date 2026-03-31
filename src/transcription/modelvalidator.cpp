@@ -34,6 +34,8 @@ RuntimeError modelTooLarge(QString message, QString detail = {})
     return makeRuntimeError(RuntimeErrorCode::ModelTooLarge, std::move(message), std::move(detail));
 }
 
+bool isRelativeSafePath(const QString &path);
+
 bool computeSha256(const QString &path, QString *digest, RuntimeError *error)
 {
     QFile file(path);
@@ -59,6 +61,59 @@ bool computeSha256(const QString &path, QString *digest, RuntimeError *error)
     return true;
 }
 
+bool validateManifestAsset(const QString &packageRootPath,
+                          const ModelAssetMetadata &asset,
+                          const ModelValidationLimits &limits,
+                          RuntimeError *error)
+{
+    if (!isRelativeSafePath(asset.relativePath)) {
+        if (error != nullptr) {
+            *error = integrityFailure(QStringLiteral("Model asset path is not safe"), asset.relativePath);
+        }
+        return false;
+    }
+    if (asset.sizeBytes < 0 || asset.sizeBytes > limits.maxWeightsBytes) {
+        if (error != nullptr) {
+            *error = modelTooLarge(QStringLiteral("Model asset exceeds supported size limits"), asset.relativePath);
+        }
+        return false;
+    }
+
+    const QString assetPath = QDir(packageRootPath).filePath(QDir::cleanPath(asset.relativePath));
+    const QFileInfo assetInfo(assetPath);
+    if (!assetInfo.exists() || !assetInfo.isFile()) {
+        if (error != nullptr) {
+            *error = integrityFailure(QStringLiteral("Model asset is missing"), assetPath);
+        }
+        return false;
+    }
+    if (assetInfo.isSymLink()) {
+        if (error != nullptr) {
+            *error = integrityFailure(QStringLiteral("Model asset must not be a symlink"), assetPath);
+        }
+        return false;
+    }
+    if (assetInfo.size() != asset.sizeBytes) {
+        if (error != nullptr) {
+            *error = integrityFailure(QStringLiteral("Model asset size does not match manifest"), assetPath);
+        }
+        return false;
+    }
+
+    QString hashDigest;
+    if (!computeSha256(assetPath, &hashDigest, error)) {
+        return false;
+    }
+    if (!asset.sha256.isEmpty() && hashDigest != asset.sha256.toLower()) {
+        if (error != nullptr) {
+            *error = integrityFailure(QStringLiteral("Model asset hash does not match manifest"), assetPath);
+        }
+        return false;
+    }
+
+    return true;
+}
+
 bool isRelativeSafePath(const QString &path)
 {
     if (path.isEmpty() || QDir::isAbsolutePath(path) || path.contains(QStringLiteral(".."))) {
@@ -67,16 +122,6 @@ bool isRelativeSafePath(const QString &path)
 
     const QString cleaned = QDir::cleanPath(path);
     return !cleaned.startsWith(QStringLiteral("../")) && cleaned != QStringLiteral("..");
-}
-
-std::optional<ModelAssetMetadata> weightsAsset(const ModelPackageManifest &manifest)
-{
-    for (const ModelAssetMetadata &asset : manifest.assets) {
-        if (asset.role == QStringLiteral("weights")) {
-            return asset;
-        }
-    }
-    return std::nullopt;
 }
 
 bool hasRequiredCompatibility(const ModelPackageManifest &manifest, QStringView engine, QStringView modelFormat)
@@ -94,6 +139,48 @@ bool hasRequiredCompatibility(const ModelPackageManifest &manifest, QStringView 
         const bool formatMatches = modelFormat.isEmpty() || marker.modelFormat == modelFormat;
         return engineMatches && formatMatches;
     });
+}
+
+bool requiresNativeExecutionMetadata(const ModelPackageManifest &manifest)
+{
+    return modelPackageSupportsCompatibility(manifest, cpuReferenceEngineName(), cpuReferenceModelFormat());
+}
+
+bool hasValidNativeExecutionMetadata(const NativeExecutionMetadata &metadata)
+{
+    if (metadata.executionVersion == 1) {
+        return !metadata.decoder.isEmpty() && !metadata.tokenizer.isEmpty() && !metadata.tokenizerAssetRole.isEmpty()
+            && !metadata.frontend.isEmpty() && !metadata.searchPolicy.isEmpty() && !metadata.timestampMode.isEmpty()
+            && metadata.featureBinCount > 0 && metadata.templateCount > 0 && metadata.maxDistance > 0.0
+            && metadata.bosTokenId >= 0 && metadata.eosTokenId >= 0 && metadata.noSpeechTokenId >= 0
+            && metadata.timestampTokenStartId >= 0 && metadata.timestampTokenEndId >= metadata.timestampTokenStartId;
+    }
+
+    if (metadata.executionVersion >= 2) {
+        return !metadata.baselineFamily.isEmpty() && !metadata.decoder.isEmpty() && !metadata.tokenizer.isEmpty()
+            && !metadata.tokenizerAssetRole.isEmpty() && !metadata.tokenizerMergesAssetRole.isEmpty()
+            && !metadata.frontend.isEmpty() && !metadata.searchPolicy.isEmpty() && !metadata.timestampMode.isEmpty()
+            && metadata.bosTokenId >= 0 && metadata.eosTokenId >= 0 && metadata.noSpeechTokenId >= 0
+            && metadata.timestampTokenStartId >= 0 && metadata.timestampTokenEndId >= metadata.timestampTokenStartId;
+    }
+
+    return false;
+}
+
+bool hasSaneNativeDecoderMetadata(const ModelPackageManifest &manifest)
+{
+    const NativeExecutionMetadata &metadata = manifest.nativeExecution;
+    if (metadata.executionVersion == 1) {
+        return manifest.metadata.vocabularySize > metadata.timestampTokenEndId && manifest.metadata.vocabularySize > 0
+            && manifest.metadata.melCount > 0;
+    }
+
+    if (metadata.executionVersion >= 2) {
+        return manifest.metadata.vocabularySize > metadata.timestampTokenEndId && manifest.metadata.vocabularySize > 0
+            && manifest.metadata.melCount > 0 && !manifest.metadata.architecture.isEmpty();
+    }
+
+    return false;
 }
 
 } // namespace
@@ -208,49 +295,35 @@ std::optional<ValidatedModelPackage> ModelValidator::validatePackagePath(const Q
         }
         return std::nullopt;
     }
+    if (requiresNativeExecutionMetadata(*manifest) && !hasValidNativeExecutionMetadata(manifest->nativeExecution)) {
+        if (error != nullptr) {
+            *error = invalidPackage(QStringLiteral("Native CPU decoder package is missing execution metadata"));
+        }
+        return std::nullopt;
+    }
+    if (requiresNativeExecutionMetadata(*manifest) && !hasSaneNativeDecoderMetadata(*manifest)) {
+        if (error != nullptr) {
+            *error = invalidPackage(QStringLiteral("Native CPU decoder package metadata is internally inconsistent"));
+        }
+        return std::nullopt;
+    }
 
-    const std::optional<ModelAssetMetadata> asset = weightsAsset(*manifest);
+    const std::optional<ModelAssetMetadata> asset = modelPackageAssetByRole(*manifest, QStringLiteral("weights"));
     if (!asset.has_value()) {
         if (error != nullptr) {
             *error = invalidPackage(QStringLiteral("Model package is missing a weights asset"));
         }
         return std::nullopt;
     }
-    if (!isRelativeSafePath(asset->relativePath)) {
-        if (error != nullptr) {
-            *error = integrityFailure(QStringLiteral("Model asset path is not safe"), asset->relativePath);
-        }
-        return std::nullopt;
-    }
-    if (asset->sizeBytes < 0 || asset->sizeBytes > limits.maxWeightsBytes) {
-        if (error != nullptr) {
-            *error = modelTooLarge(QStringLiteral("Model weights asset exceeds supported size limits"));
-        }
-        return std::nullopt;
-    }
-
     const QString weightsPath = QDir(packageRootPath).filePath(QDir::cleanPath(asset->relativePath));
-    const QFileInfo weightsInfo(weightsPath);
-    if (!weightsInfo.exists() || !weightsInfo.isFile()) {
-        if (error != nullptr) {
-            *error = integrityFailure(QStringLiteral("Model weights asset is missing"), weightsPath);
-        }
-        return std::nullopt;
-    }
-    if (weightsInfo.isSymLink()) {
-        if (error != nullptr) {
-            *error = integrityFailure(QStringLiteral("Model weights asset must not be a symlink"), weightsPath);
-        }
-        return std::nullopt;
-    }
-    if (weightsInfo.size() != asset->sizeBytes) {
-        if (error != nullptr) {
-            *error = integrityFailure(QStringLiteral("Model weights asset size does not match manifest"), weightsPath);
-        }
+    if (!validateManifestAsset(packageRootPath, *asset, limits, error)) {
         return std::nullopt;
     }
 
-    const qint64 packageBytes = manifestInfo.size() + weightsInfo.size();
+    qint64 packageBytes = manifestInfo.size();
+    for (const ModelAssetMetadata &manifestAsset : manifest->assets) {
+        packageBytes += manifestAsset.sizeBytes;
+    }
     if (packageBytes > limits.maxPackageBytes) {
         if (error != nullptr) {
             *error = modelTooLarge(QStringLiteral("Model package exceeds supported size limits"), packageRootPath);
@@ -258,15 +331,32 @@ std::optional<ValidatedModelPackage> ModelValidator::validatePackagePath(const Q
         return std::nullopt;
     }
 
-    QString hashDigest;
-    if (!computeSha256(weightsPath, &hashDigest, error)) {
-        return std::nullopt;
-    }
-    if (!asset->sha256.isEmpty() && hashDigest != asset->sha256.toLower()) {
-        if (error != nullptr) {
-            *error = integrityFailure(QStringLiteral("Model weights hash does not match manifest"), weightsPath);
+    if (requiresNativeExecutionMetadata(*manifest)) {
+        const std::optional<ModelAssetMetadata> tokenizerAsset =
+            modelPackageAssetByRole(*manifest, manifest->nativeExecution.tokenizerAssetRole);
+        if (!tokenizerAsset.has_value()) {
+            if (error != nullptr) {
+                *error = invalidPackage(QStringLiteral("Native CPU decoder package is missing a tokenizer asset"));
+            }
+            return std::nullopt;
         }
-        return std::nullopt;
+        if (!validateManifestAsset(packageRootPath, *tokenizerAsset, limits, error)) {
+            return std::nullopt;
+        }
+
+        if (manifest->nativeExecution.executionVersion >= 2) {
+            const std::optional<ModelAssetMetadata> mergesAsset =
+                modelPackageAssetByRole(*manifest, manifest->nativeExecution.tokenizerMergesAssetRole);
+            if (!mergesAsset.has_value()) {
+                if (error != nullptr) {
+                    *error = invalidPackage(QStringLiteral("Native CPU decoder package is missing tokenizer merge assets"));
+                }
+                return std::nullopt;
+            }
+            if (!validateManifestAsset(packageRootPath, *mergesAsset, limits, error)) {
+                return std::nullopt;
+            }
+        }
     }
 
     return ValidatedModelPackage{

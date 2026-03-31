@@ -67,26 +67,94 @@ mutterkey_add_qt_test(transcriptionworkertest
 
 mutterkey_add_qt_test(cpureferencetranscribertest
     cpureferencetranscribertest.cpp
+    ../src/transcription/cpudecoderforward.cpp
+    ../src/transcription/cpudecoderruntime.cpp
+    ../src/transcription/cpudecodergraph.cpp
+    ../src/transcription/cpuencoderforward.cpp
+    ../src/transcription/cpufeatureextractor.cpp
+    ../src/transcription/cpugreedysearch.cpp
+    ../src/transcription/cpumelspectrogram.cpp
+    ../src/transcription/cpumodelweights.cpp
     ../src/transcription/cpureferencemodel.cpp
+    ../src/transcription/cputensor.cpp
     ../src/transcription/modelcatalog.cpp
     ../src/transcription/transcriptionengine.cpp
     ../src/transcription/modelpackage.cpp
     ../src/transcription/modelvalidator.cpp
     ../src/transcription/cpureferencetranscriber.cpp
+    ../src/transcription/cpusessionstate.cpp
+    ../src/transcription/cputokensearch.cpp
+    ../src/transcription/cputokenizer.cpp
+    ../src/transcription/cpuwhispertokenizer.cpp
+    ../src/transcription/cputimestamps.cpp
     ../src/transcription/rawwhisperprobe.cpp
     ../src/transcription/runtimeselector.cpp
+)
+
+mutterkey_add_qt_test(cpudecoderruntimetest
+    cpudecoderruntimetest.cpp
+    ../src/transcription/cpudecoderforward.cpp
+    ../src/transcription/cpudecoderruntime.cpp
+    ../src/transcription/cpudecodergraph.cpp
+    ../src/transcription/cpuencoderforward.cpp
+    ../src/transcription/cpufeatureextractor.cpp
+    ../src/transcription/cpugreedysearch.cpp
+    ../src/transcription/cpumelspectrogram.cpp
+    ../src/transcription/cpumodelweights.cpp
+    ../src/transcription/cputensor.cpp
+    ../src/transcription/cputokensearch.cpp
+    ../src/transcription/cputokenizer.cpp
+    ../src/transcription/cpuwhispertokenizer.cpp
+    ../src/transcription/cputimestamps.cpp
+)
+
+mutterkey_add_qt_test(cpurealdecodertest
+    cpurealdecodertest.cpp
+    ../src/transcription/cpudecoderforward.cpp
+    ../src/transcription/cpudecoderruntime.cpp
+    ../src/transcription/cpudecodergraph.cpp
+    ../src/transcription/cpuencoderforward.cpp
+    ../src/transcription/cpufeatureextractor.cpp
+    ../src/transcription/cpugreedysearch.cpp
+    ../src/transcription/cpumelspectrogram.cpp
+    ../src/transcription/cpumodelweights.cpp
+    ../src/transcription/cputensor.cpp
+    ../src/transcription/cputokensearch.cpp
+    ../src/transcription/cputokenizer.cpp
+    ../src/transcription/cpuwhispertokenizer.cpp
+    ../src/transcription/cputimestamps.cpp
+)
+
+mutterkey_add_qt_test(cpuwhispertokenizertest
+    cpuwhispertokenizertest.cpp
+    ../src/transcription/cputokenizer.cpp
+    ../src/transcription/cpuwhispertokenizer.cpp
 )
 
 if(MUTTERKEY_ENABLE_LEGACY_WHISPER)
     mutterkey_add_qt_test(whispercpptranscribertest
         whispercpptranscribertest.cpp
+        ../src/transcription/cpudecoderforward.cpp
+        ../src/transcription/cpudecoderruntime.cpp
+        ../src/transcription/cpudecodergraph.cpp
+        ../src/transcription/cpuencoderforward.cpp
+        ../src/transcription/cpufeatureextractor.cpp
+        ../src/transcription/cpugreedysearch.cpp
+        ../src/transcription/cpumelspectrogram.cpp
+        ../src/transcription/cpumodelweights.cpp
         ../src/transcription/cpureferencemodel.cpp
+        ../src/transcription/cputensor.cpp
         ../src/transcription/modelcatalog.cpp
         ../src/transcription/transcriptionengine.cpp
         ../src/transcription/modelpackage.cpp
         ../src/transcription/modelvalidator.cpp
         ../src/transcription/rawwhisperprobe.cpp
         ../src/transcription/cpureferencetranscriber.cpp
+        ../src/transcription/cpusessionstate.cpp
+        ../src/transcription/cputokensearch.cpp
+        ../src/transcription/cputokenizer.cpp
+        ../src/transcription/cpuwhispertokenizer.cpp
+        ../src/transcription/cputimestamps.cpp
         ../src/transcription/runtimeselector.cpp
         ../src/transcription/whispercpptranscriber.cpp
     )
@@ -115,14 +183,14 @@ add_test(NAME testcommentarycheck
 )
 
 if(TARGET clang-tidy)
-    add_dependencies(clang-tidy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen streamingtranscriptiontest_autogen modelpackagetest_autogen daemoncontrolprotocoltest_autogen daemoncontroltypestest_autogen daemoncontrolclientservertest_autogen transcriptionworkertest_autogen cpureferencetranscribertest_autogen platformlogicstest_autogen traystatuswindowtest_autogen)
+    add_dependencies(clang-tidy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen streamingtranscriptiontest_autogen modelpackagetest_autogen daemoncontrolprotocoltest_autogen daemoncontroltypestest_autogen daemoncontrolclientservertest_autogen transcriptionworkertest_autogen cpureferencetranscribertest_autogen cpudecoderruntimetest_autogen cpurealdecodertest_autogen cpuwhispertokenizertest_autogen platformlogicstest_autogen traystatuswindowtest_autogen)
     if(TARGET whispercpptranscribertest_autogen)
         add_dependencies(clang-tidy whispercpptranscribertest_autogen)
     endif()
 endif()
 
 if(TARGET clazy)
-    add_dependencies(clazy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen streamingtranscriptiontest_autogen modelpackagetest_autogen daemoncontrolprotocoltest_autogen daemoncontroltypestest_autogen daemoncontrolclientservertest_autogen transcriptionworkertest_autogen cpureferencetranscribertest_autogen platformlogicstest_autogen traystatuswindowtest_autogen)
+    add_dependencies(clazy configtest_autogen commanddispatchtest_autogen recordingnormalizertest_autogen streamingtranscriptiontest_autogen modelpackagetest_autogen daemoncontrolprotocoltest_autogen daemoncontroltypestest_autogen daemoncontrolclientservertest_autogen transcriptionworkertest_autogen cpureferencetranscribertest_autogen cpudecoderruntimetest_autogen cpurealdecodertest_autogen cpuwhispertokenizertest_autogen platformlogicstest_autogen traystatuswindowtest_autogen)
     if(TARGET whispercpptranscribertest_autogen)
         add_dependencies(clazy whispercpptranscribertest_autogen)
     endif()

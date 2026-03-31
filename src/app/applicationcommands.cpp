@@ -204,6 +204,29 @@ QJsonArray compatibilityToJson(const std::vector<ModelCompatibilityMarker> &mark
     return array;
 }
 
+QJsonObject nativeExecutionToJson(const NativeExecutionMetadata &metadata)
+{
+    return QJsonObject{
+        {QStringLiteral("execution_version"), metadata.executionVersion},
+        {QStringLiteral("baseline_family"), metadata.baselineFamily},
+        {QStringLiteral("decoder"), metadata.decoder},
+        {QStringLiteral("tokenizer"), metadata.tokenizer},
+        {QStringLiteral("tokenizer_asset_role"), metadata.tokenizerAssetRole},
+        {QStringLiteral("tokenizer_merges_asset_role"), metadata.tokenizerMergesAssetRole},
+        {QStringLiteral("frontend"), metadata.frontend},
+        {QStringLiteral("search_policy"), metadata.searchPolicy},
+        {QStringLiteral("timestamp_mode"), metadata.timestampMode},
+        {QStringLiteral("feature_bin_count"), metadata.featureBinCount},
+        {QStringLiteral("template_count"), metadata.templateCount},
+        {QStringLiteral("max_distance"), metadata.maxDistance},
+        {QStringLiteral("bos_token_id"), metadata.bosTokenId},
+        {QStringLiteral("eos_token_id"), metadata.eosTokenId},
+        {QStringLiteral("no_speech_token_id"), metadata.noSpeechTokenId},
+        {QStringLiteral("timestamp_token_start_id"), metadata.timestampTokenStartId},
+        {QStringLiteral("timestamp_token_end_id"), metadata.timestampTokenEndId},
+    };
+}
+
 QJsonArray assetsToJson(const std::vector<ModelAssetMetadata> &assets)
 {
     QJsonArray array;
@@ -255,6 +278,7 @@ int runModelInspect(const QString &path)
     object.insert(QStringLiteral("weights_path"), package->weightsPath);
     object.insert(QStringLiteral("description"), package->description());
     object.insert(QStringLiteral("metadata"), metadataToJson(package->metadata()));
+    object.insert(QStringLiteral("native_execution"), nativeExecutionToJson(package->nativeExecution()));
     object.insert(QStringLiteral("compatible_engines"), compatibilityToJson(package->manifest.compatibleEngines));
     object.insert(QStringLiteral("assets"), assetsToJson(package->manifest.assets));
     QTextStream(stdout) << QJsonDocument(object).toJson(QJsonDocument::Indented);

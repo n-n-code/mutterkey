@@ -70,7 +70,7 @@ resolveWhisperModelHandle(std::shared_ptr<const TranscriptionModelHandle> model)
     return std::dynamic_pointer_cast<const WhisperCppModelHandle>(std::move(model));
 }
 
-QString backendDeviceTypeName(enum ggml_backend_dev_type type)
+QString backendDeviceTypeName(int type)
 {
     switch (type) {
     case GGML_BACKEND_DEVICE_TYPE_CPU:
@@ -81,6 +81,8 @@ QString backendDeviceTypeName(enum ggml_backend_dev_type type)
         return QStringLiteral("IGPU");
     case GGML_BACKEND_DEVICE_TYPE_ACCEL:
         return QStringLiteral("ACCEL");
+    default:
+        break;
     }
 
     return QStringLiteral("UNKNOWN");
@@ -113,9 +115,9 @@ QString describeRegisteredBackends()
         .arg(backendNames.join(QStringLiteral(", ")), deviceDescriptions.join(QStringLiteral(" | ")));
 }
 
-RuntimeError makeRuntimeError(RuntimeErrorCode code, QString message, QString detail = {})
+RuntimeError makeRuntimeError(RuntimeErrorCode code, const QString &message, const QString &detail = {})
 {
-    return RuntimeError{.code = code, .message = std::move(message), .detail = std::move(detail)};
+    return RuntimeError{.code = code, .message = message, .detail = detail};
 }
 
 RuntimeError makeUnsupportedLanguageError(const QString &language)
@@ -195,14 +197,14 @@ WhisperCppTranscriber::loadModelHandle(const TranscriberConfig &config, RuntimeE
 }
 
 std::unique_ptr<TranscriptionSession>
-WhisperCppTranscriber::createSession(TranscriberConfig config, std::shared_ptr<const TranscriptionModelHandle> model)
+WhisperCppTranscriber::createSession(const TranscriberConfig &config, std::shared_ptr<const TranscriptionModelHandle> model)
 {
     std::shared_ptr<const WhisperCppModelHandle> whisperModel = resolveWhisperModelHandle(std::move(model));
     if (whisperModel == nullptr) {
         return nullptr;
     }
 
-    return std::make_unique<WhisperCppTranscriber>(std::move(config), std::move(whisperModel));
+    return std::make_unique<WhisperCppTranscriber>(config, std::move(whisperModel));
 }
 
 WhisperCppTranscriber::WhisperCppTranscriber(TranscriberConfig config, std::shared_ptr<const TranscriptionModelHandle> model)

@@ -2,6 +2,7 @@
 
 #include "config.h"
 #include "transcription/cpureferencemodel.h"
+#include "transcription/cpusessionstate.h"
 #include "transcription/modelpackage.h"
 #include "transcription/transcriptionengine.h"
 #include "transcription/transcriptiontypes.h"
@@ -82,9 +83,7 @@ public:
 private:
     TranscriberConfig m_config;
     std::shared_ptr<const CpuReferenceModelHandle> m_model;
-    std::vector<float> m_bufferedSamples;
-    bool m_warmedUp = false;
-    bool m_cancelRequested = false;
+    CpuSessionState m_state;
 };
 
 /**

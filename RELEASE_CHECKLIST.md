@@ -34,6 +34,13 @@ bash scripts/check-release-hygiene.sh
 bash scripts/run-release-checklist.sh
 ```
 
+- To include the headless `diagnose 1` step without reading your real
+  `~/.config/mutterkey/config.json`, pass an explicit model path:
+
+```bash
+bash scripts/run-release-checklist.sh --diagnose-model-path ~/.local/share/mutterkey/models/<package-id>
+```
+
 - Pass extra CMake configure arguments after `--` when you want to exercise an
   accelerated release build. For example:
 
@@ -131,8 +138,14 @@ timeout 2s env QT_QPA_PLATFORM=offscreen "$BUILD_DIR/mutterkey-tray"
 - If the change affects startup, service wiring, or config handling, also run:
 
 ```bash
-QT_QPA_PLATFORM=offscreen "$BUILD_DIR/mutterkey" diagnose 1
+DIAGNOSE_CONFIG_DIR="$(mktemp -d /tmp/mutterkey-diagnose-config-XXXXXX)"
+"$BUILD_DIR/mutterkey" --config "$DIAGNOSE_CONFIG_DIR/config.json" config init --model-path /path/to/mutterkey-model-package
+QT_QPA_PLATFORM=offscreen "$BUILD_DIR/mutterkey" --config "$DIAGNOSE_CONFIG_DIR/config.json" diagnose 1
 ```
+
+- Do not rely on your existing `~/.config/mutterkey/config.json` for release
+  validation. Use an explicit temporary config and model path so the result is
+  deterministic.
 
 ## Install Validation
 

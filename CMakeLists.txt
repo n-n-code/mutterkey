@@ -9,7 +9,7 @@ set(MUTTERKEY_LICENSE_INSTALL_DIR "${CMAKE_INSTALL_DATADIR}/licenses/${PROJECT_N
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -48,10 +48,38 @@ set(MUTTERKEY_CORE_SOURCES
     src/transcription/transcriptionengine.h
     src/transcription/audiochunker.cpp
     src/transcription/audiochunker.h
+    src/transcription/cpudecoderforward.cpp
+    src/transcription/cpudecoderforward.h
+    src/transcription/cpudecoderruntime.cpp
+    src/transcription/cpudecoderruntime.h
+    src/transcription/cpudecodergraph.cpp
+    src/transcription/cpudecodergraph.h
+    src/transcription/cpuencoderforward.cpp
+    src/transcription/cpuencoderforward.h
+    src/transcription/cpufeatureextractor.cpp
+    src/transcription/cpufeatureextractor.h
+    src/transcription/cpugreedysearch.cpp
+    src/transcription/cpugreedysearch.h
+    src/transcription/cpumelspectrogram.cpp
+    src/transcription/cpumelspectrogram.h
+    src/transcription/cpumodelweights.cpp
+    src/transcription/cpumodelweights.h
     src/transcription/cpureferencemodel.cpp
     src/transcription/cpureferencemodel.h
+    src/transcription/cputensor.cpp
+    src/transcription/cputensor.h
     src/transcription/cpureferencetranscriber.cpp
     src/transcription/cpureferencetranscriber.h
+    src/transcription/cpusessionstate.cpp
+    src/transcription/cpusessionstate.h
+    src/transcription/cputimestamps.cpp
+    src/transcription/cputimestamps.h
+    src/transcription/cputokensearch.cpp
+    src/transcription/cputokensearch.h
+    src/transcription/cputokenizer.cpp
+    src/transcription/cputokenizer.h
+    src/transcription/cpuwhispertokenizer.cpp
+    src/transcription/cpuwhispertokenizer.h
     src/transcription/modelcatalog.cpp
     src/transcription/modelcatalog.h
     src/transcription/modelpackage.cpp

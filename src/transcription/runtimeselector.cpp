@@ -24,6 +24,16 @@ RuntimeSelection makeLegacySelection(QString reason, std::optional<ValidatedMode
     };
 }
 
+bool supportsNativeCpuRuntime(const ModelPackageManifest &manifest)
+{
+    return modelPackageSupportsCompatibility(manifest, cpuReferenceEngineName(), cpuReferenceModelFormat());
+}
+
+bool supportsNativeCpuFixtureRuntime(const ModelPackageManifest &manifest)
+{
+    return modelPackageSupportsCompatibility(manifest, cpuReferenceEngineName(), cpuReferenceFixtureModelFormat());
+}
+
 } // namespace
 
 RuntimeSelection selectRuntimeForConfig(const TranscriberConfig &config)
@@ -37,8 +47,12 @@ RuntimeSelection selectRuntimeForConfig(const TranscriberConfig &config)
 #endif
     }
 
-    if (modelPackageSupportsCompatibility(package->manifest, cpuReferenceEngineName(), cpuReferenceModelFormat())) {
-        return makeCpuSelection(QStringLiteral("Selected native CPU reference runtime from package compatibility markers"), package);
+    if (supportsNativeCpuRuntime(package->manifest)) {
+        return makeCpuSelection(QStringLiteral("Selected native CPU decoder runtime from package compatibility markers"), package);
+    }
+
+    if (supportsNativeCpuFixtureRuntime(package->manifest)) {
+        return makeCpuSelection(QStringLiteral("Selected native CPU fixture runtime from legacy native compatibility markers"), package);
     }
 
     if (modelPackageSupportsCompatibility(package->manifest, legacyWhisperEngineName(), legacyWhisperModelFormat())) {

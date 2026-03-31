@@ -39,8 +39,16 @@ if(NOT verify_result EQUAL 0)
     message(FATAL_ERROR "clang-tidy configuration verification failed")
 endif()
 
+file(READ "${BUILD_DIR}/compile_commands.json" COMPILE_COMMANDS_JSON)
+
 set(failed FALSE)
 foreach(source_file IN LISTS SOURCE_FILES)
+    string(FIND "${COMPILE_COMMANDS_JSON}" "\"file\": \"${source_file}\"" compile_command_index)
+    if(compile_command_index EQUAL -1)
+        message(STATUS "Skipping clang-tidy for ${source_file} because it is not part of the configured build")
+        continue()
+    endif()
+
     message(STATUS "Running clang-tidy on ${source_file}")
     execute_process(
         COMMAND "${TOOL_BIN}"

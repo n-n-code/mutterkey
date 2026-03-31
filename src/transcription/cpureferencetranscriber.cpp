@@ -1,5 +1,7 @@
 #include "transcription/cpureferencetranscriber.h"
 
+#include "transcription/cpudecoderruntime.h"
+#include "transcription/cpufeatureextractor.h"
 #include "transcription/modelcatalog.h"
 #include "transcription/runtimeselector.h"
 
@@ -7,7 +9,6 @@
 #include <QThread>
 
 #include <algorithm>
-#include <cmath>
 #include <utility>
 
 namespace {
@@ -37,7 +38,7 @@ QString normalizedLanguage(const QString &value)
 bool supportsLanguage(const QString &languageProfile, const QString &requestedLanguage)
 {
     if (requestedLanguage.isEmpty() || requestedLanguage == QStringLiteral("auto")) {
-        return languageProfile == QStringLiteral("multilingual");
+        return !languageProfile.isEmpty();
     }
 
     if (languageProfile == QStringLiteral("multilingual")) {
@@ -47,23 +48,24 @@ bool supportsLanguage(const QString &languageProfile, const QString &requestedLa
     return requestedLanguage == languageProfile;
 }
 
-float peakAbsoluteSample(const std::vector<float> &samples)
-{
-    float peak = 0.0F;
-    for (const float sample : samples) {
-        peak = std::max(peak, std::abs(sample));
-    }
-    return peak;
-}
-
 } // namespace
 
 std::shared_ptr<const TranscriptionModelHandle>
 CpuReferenceTranscriber::loadModelHandle(const TranscriberConfig &config, RuntimeError *error)
 {
-    const std::optional<ValidatedModelPackage> package =
-        ModelCatalog::inspectPath(config.modelPath, cpuReferenceEngineName(), cpuReferenceModelFormat(), error);
+    const auto loadForFormat = [&config](QStringView modelFormat, RuntimeError *runtimeError) {
+        return ModelCatalog::inspectPath(config.modelPath, cpuReferenceEngineName(), modelFormat, runtimeError);
+    };
+
+    RuntimeError formatError;
+    std::optional<ValidatedModelPackage> package = loadForFormat(cpuReferenceModelFormat(), &formatError);
     if (!package.has_value()) {
+        package = loadForFormat(cpuReferenceFixtureModelFormat(), &formatError);
+    }
+    if (!package.has_value()) {
+        if (error != nullptr) {
+            *error = formatError;
+        }
         return nullptr;
     }
 
@@ -110,8 +112,8 @@ RuntimeDiagnostics CpuReferenceTranscriber::diagnosticsStatic()
 {
     return RuntimeDiagnostics{
         .backendName = backendNameStatic(),
-        .selectionReason = QStringLiteral("Native CPU reference runtime selected explicitly"),
-        .runtimeDescription = QStringLiteral("native cpu reference runtime; threads=%1")
+        .selectionReason = QStringLiteral("Native CPU decoder runtime selected explicitly"),
+        .runtimeDescription = QStringLiteral("native cpu decoder runtime; threads=%1")
                                   .arg(std::max(1, QThread::idealThreadCount())),
         .loadedModelDescription = {},
     };
@@ -132,8 +134,12 @@ bool CpuReferenceTranscriber::warmup(RuntimeError *error)
         return false;
     }
 
-    m_cancelRequested = false;
-    m_warmedUp = true;
+    if (m_model->model().kind == CpuReferenceModelKind::RealDecoderV3
+        && m_model->model().tensorWeights != nullptr) {
+        m_state.allocateKVCache(m_model->model().tensorWeights->config, 224);
+    }
+
+    m_state.markWarmedUp();
     return true;
 }
 
@@ -155,14 +161,14 @@ TranscriptUpdate CpuReferenceTranscriber::pushAudioChunk(const AudioChunk &chunk
         };
     }
 
-    m_bufferedSamples.insert(m_bufferedSamples.end(), chunk.samples.begin(), chunk.samples.end());
+    m_state.appendChunk(chunk);
     return {};
 }
 
 TranscriptUpdate CpuReferenceTranscriber::finish()
 {
-    if (m_cancelRequested) {
-        m_bufferedSamples.clear();
+    if (m_state.cancelRequested()) {
+        m_state.resetForNextUtterance();
         return TranscriptUpdate{
             .events = {},
             .error = makeRuntimeError(RuntimeErrorCode::Cancelled,
@@ -194,31 +200,35 @@ TranscriptUpdate CpuReferenceTranscriber::finish()
         };
     }
 
-    if (!m_warmedUp) {
+    if (!m_state.isWarmedUp()) {
         RuntimeError warmupError;
         if (!warmup(&warmupError)) {
             return TranscriptUpdate{.events = {}, .error = std::move(warmupError)};
         }
     }
 
-    if (m_bufferedSamples.empty() || peakAbsoluteSample(m_bufferedSamples) < kMinimumSpeechPeak) {
-        m_bufferedSamples.clear();
+    const std::vector<float> &bufferedSamples = m_state.bufferedSamples();
+    if (bufferedSamples.empty() || peakAbsoluteSample(bufferedSamples) < kMinimumSpeechPeak) {
+        m_state.resetForNextUtterance();
         return {};
     }
 
-    const auto durationMs = std::max<std::int64_t>(
-        1,
-        static_cast<std::int64_t>((static_cast<double>(m_bufferedSamples.size()) * 1000.0) / kExpectedSampleRate));
-    const QString transcript = m_model->transcript().trimmed();
-    m_bufferedSamples.clear();
+    const std::optional<CpuDecodeResult> decodeResult = runCpuDecodePass(CpuDecodeRequest{
+        .samples = bufferedSamples,
+        .model = &m_model->model(),
+        .execution = &m_model->execution(),
+        .kvCache = m_model->model().kind == CpuReferenceModelKind::RealDecoderV3
+            ? &m_state.kvCache() : nullptr,
+        .sampleRate = kExpectedSampleRate,
+    });
+    m_state.resetForNextUtterance();
+    if (!decodeResult.has_value()) {
+        return {};
+    }
+
     return TranscriptUpdate{
         .events = {
-            TranscriptEvent{
-                .kind = TranscriptEventKind::Final,
-                .text = transcript,
-                .startMs = 0,
-                .endMs = durationMs,
-            },
+            decodeResult->event,
         },
         .error = {},
     };
@@ -226,8 +236,7 @@ TranscriptUpdate CpuReferenceTranscriber::finish()
 
 TranscriptUpdate CpuReferenceTranscriber::cancel()
 {
-    m_cancelRequested = true;
-    m_bufferedSamples.clear();
+    m_state.requestCancel();
     return TranscriptUpdate{
         .events = {},
         .error = makeRuntimeError(RuntimeErrorCode::Cancelled,

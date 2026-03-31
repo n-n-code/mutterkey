@@ -4,19 +4,22 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: bash scripts/run-release-checklist.sh [--build-dir DIR] [--skip-diagnose] [-- <cmake-configure-args...>]
+Usage: bash scripts/run-release-checklist.sh [--build-dir DIR] [--diagnose-model-path PATH] [--skip-diagnose] [-- <cmake-configure-args...>]
 
 Runs the automated portion of RELEASE_CHECKLIST.md up to, but not including,
 install validation.
 
 Options:
-  --build-dir DIR    Use an existing or chosen build directory instead of a new tmpdir.
-  --skip-diagnose    Skip the headless `mutterkey diagnose 1` step.
-  --help             Show this help text.
+  --build-dir DIR            Use an existing or chosen build directory instead of a new tmpdir.
+  --diagnose-model-path PATH Model package path, manifest path, or raw compatibility artifact
+                            to use for the headless `mutterkey diagnose 1` step.
+  --skip-diagnose            Skip the headless `mutterkey diagnose 1` step.
+  --help                     Show this help text.
 
 Examples:
   bash scripts/run-release-checklist.sh
   bash scripts/run-release-checklist.sh --build-dir /tmp/mutterkey-build-abc123
+  bash scripts/run-release-checklist.sh --diagnose-model-path ~/.local/share/mutterkey/models/<package-id>
   bash scripts/run-release-checklist.sh -- -DMUTTERKEY_ENABLE_WHISPER_VULKAN=ON
 EOF
 }
@@ -79,14 +82,30 @@ scan_for_model_binaries() {
 }
 
 build_dir=""
+diagnose_model_path="${MUTTERKEY_RELEASE_MODEL_PATH:-}"
 skip_diagnose=0
 declare -a extra_cmake_args=()
+declare -a cleanup_paths=()
+
+cleanup() {
+    local path
+    for path in "${cleanup_paths[@]}"; do
+        [[ -e "$path" ]] && rm -rf "$path"
+    done
+}
+
+trap cleanup EXIT
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
     --build-dir)
         [[ $# -ge 2 ]] || die "--build-dir requires a value"
         build_dir="$2"
+        shift 2
+        ;;
+    --diagnose-model-path)
+        [[ $# -ge 2 ]] || die "--diagnose-model-path requires a value"
+        diagnose_model_path="$2"
         shift 2
         ;;
     --skip-diagnose)
@@ -166,7 +185,17 @@ if [[ $tray_status -ne 0 && $tray_status -ne 124 ]]; then
 fi
 
 if [[ $skip_diagnose -eq 0 ]]; then
-    run_cmd env QT_QPA_PLATFORM=offscreen "$build_dir/mutterkey" diagnose 1
+    if [[ -z "$diagnose_model_path" ]]; then
+        note "Skipping headless diagnose step because no explicit diagnose model path was provided"
+        note "Pass --diagnose-model-path PATH or set MUTTERKEY_RELEASE_MODEL_PATH to run it with a temporary config"
+    else
+        assert_file_exists "$diagnose_model_path"
+        diagnose_config_dir="$(mktemp -d /tmp/mutterkey-diagnose-config-XXXXXX)"
+        cleanup_paths+=("$diagnose_config_dir")
+        diagnose_config_path="$diagnose_config_dir/config.json"
+        run_cmd "$build_dir/mutterkey" --config "$diagnose_config_path" config init --model-path "$diagnose_model_path"
+        run_cmd env QT_QPA_PLATFORM=offscreen "$build_dir/mutterkey" --config "$diagnose_config_path" diagnose 1
+    fi
 else
     note "Skipping headless diagnose step by request"
 fi

@@ -19,6 +19,12 @@ int readInt(const QJsonObject &object, QStringView key)
     return value.isDouble() ? value.toInt() : 0;
 }
 
+double readDouble(const QJsonObject &object, QStringView key)
+{
+    const QJsonValue value = object.value(key);
+    return value.isDouble() ? value.toDouble() : 0.0;
+}
+
 void setIfNotEmpty(QJsonObject *object, QStringView key, const QString &value)
 {
     if (object != nullptr && !value.isEmpty()) {
@@ -82,6 +88,52 @@ ModelMetadata metadataFromJson(const QJsonObject &object)
     };
 }
 
+QJsonObject nativeExecutionToJson(const NativeExecutionMetadata &metadata)
+{
+    QJsonObject object;
+    object.insert(QStringLiteral("execution_version"), metadata.executionVersion);
+    setIfNotEmpty(&object, QStringLiteral("baseline_family"), metadata.baselineFamily);
+    setIfNotEmpty(&object, QStringLiteral("decoder"), metadata.decoder);
+    setIfNotEmpty(&object, QStringLiteral("tokenizer"), metadata.tokenizer);
+    setIfNotEmpty(&object, QStringLiteral("tokenizer_asset_role"), metadata.tokenizerAssetRole);
+    setIfNotEmpty(&object, QStringLiteral("tokenizer_merges_asset_role"), metadata.tokenizerMergesAssetRole);
+    setIfNotEmpty(&object, QStringLiteral("frontend"), metadata.frontend);
+    setIfNotEmpty(&object, QStringLiteral("search_policy"), metadata.searchPolicy);
+    setIfNotEmpty(&object, QStringLiteral("timestamp_mode"), metadata.timestampMode);
+    object.insert(QStringLiteral("feature_bin_count"), metadata.featureBinCount);
+    object.insert(QStringLiteral("template_count"), metadata.templateCount);
+    object.insert(QStringLiteral("max_distance"), metadata.maxDistance);
+    object.insert(QStringLiteral("bos_token_id"), metadata.bosTokenId);
+    object.insert(QStringLiteral("eos_token_id"), metadata.eosTokenId);
+    object.insert(QStringLiteral("no_speech_token_id"), metadata.noSpeechTokenId);
+    object.insert(QStringLiteral("timestamp_token_start_id"), metadata.timestampTokenStartId);
+    object.insert(QStringLiteral("timestamp_token_end_id"), metadata.timestampTokenEndId);
+    return object;
+}
+
+NativeExecutionMetadata nativeExecutionFromJson(const QJsonObject &object)
+{
+    return NativeExecutionMetadata{
+        .executionVersion = readInt(object, QStringLiteral("execution_version")),
+        .baselineFamily = readString(object, QStringLiteral("baseline_family")),
+        .decoder = readString(object, QStringLiteral("decoder")),
+        .tokenizer = readString(object, QStringLiteral("tokenizer")),
+        .tokenizerAssetRole = readString(object, QStringLiteral("tokenizer_asset_role")),
+        .tokenizerMergesAssetRole = readString(object, QStringLiteral("tokenizer_merges_asset_role")),
+        .frontend = readString(object, QStringLiteral("frontend")),
+        .searchPolicy = readString(object, QStringLiteral("search_policy")),
+        .timestampMode = readString(object, QStringLiteral("timestamp_mode")),
+        .featureBinCount = readInt(object, QStringLiteral("feature_bin_count")),
+        .templateCount = readInt(object, QStringLiteral("template_count")),
+        .maxDistance = readDouble(object, QStringLiteral("max_distance")),
+        .bosTokenId = readInt(object, QStringLiteral("bos_token_id")),
+        .eosTokenId = readInt(object, QStringLiteral("eos_token_id")),
+        .noSpeechTokenId = readInt(object, QStringLiteral("no_speech_token_id")),
+        .timestampTokenStartId = readInt(object, QStringLiteral("timestamp_token_start_id")),
+        .timestampTokenEndId = readInt(object, QStringLiteral("timestamp_token_end_id")),
+    };
+}
+
 } // namespace
 
 QString ValidatedModelPackage::description() const
@@ -92,6 +144,21 @@ QString ValidatedModelPackage::description() const
         return sourceLabel;
     }
     return QStringLiteral("%1 (%2)").arg(packageLabel, sourceLabel);
+}
+
+std::optional<ModelAssetMetadata> ValidatedModelPackage::assetByRole(QStringView role) const
+{
+    return modelPackageAssetByRole(manifest, role);
+}
+
+std::optional<QString> ValidatedModelPackage::resolvedAssetPath(QStringView role) const
+{
+    const std::optional<ModelAssetMetadata> asset = assetByRole(role);
+    if (!asset.has_value()) {
+        return std::nullopt;
+    }
+
+    return QDir(packageRootPath).filePath(QDir::cleanPath(asset->relativePath));
 }
 
 QString defaultModelPackageDirectory()
@@ -138,6 +205,11 @@ QString cpuReferenceEngineName()
 
 QString cpuReferenceModelFormat()
 {
+    return QStringLiteral("mkasr-v2");
+}
+
+QString cpuReferenceFixtureModelFormat()
+{
     return QStringLiteral("mkasr-v1");
 }
 
@@ -158,12 +230,31 @@ bool modelPackageSupportsCompatibility(const ModelPackageManifest &manifest, QSt
     });
 }
 
+std::optional<ModelAssetMetadata> modelPackageAssetByRole(const ModelPackageManifest &manifest, QStringView role)
+{
+    for (const ModelAssetMetadata &asset : manifest.assets) {
+        if (asset.role == role) {
+            return asset;
+        }
+    }
+
+    return std::nullopt;
+}
+
 QJsonObject modelPackageManifestToJson(const ModelPackageManifest &manifest)
 {
     QJsonObject root;
     root.insert(QStringLiteral("format"), manifest.format);
     root.insert(QStringLiteral("schema_version"), manifest.schemaVersion);
     root.insert(QStringLiteral("metadata"), metadataToJson(manifest.metadata));
+    if (manifest.nativeExecution.executionVersion > 0 || !manifest.nativeExecution.baselineFamily.isEmpty()
+        || !manifest.nativeExecution.decoder.isEmpty()
+        || !manifest.nativeExecution.tokenizer.isEmpty() || !manifest.nativeExecution.tokenizerAssetRole.isEmpty()
+        || !manifest.nativeExecution.tokenizerMergesAssetRole.isEmpty()
+        || !manifest.nativeExecution.frontend.isEmpty()
+        || !manifest.nativeExecution.searchPolicy.isEmpty() || !manifest.nativeExecution.timestampMode.isEmpty()) {
+        root.insert(QStringLiteral("native_execution"), nativeExecutionToJson(manifest.nativeExecution));
+    }
 
     QJsonArray compatibleEngines;
     for (const ModelCompatibilityMarker &marker : manifest.compatibleEngines) {
@@ -194,6 +285,7 @@ std::optional<ModelPackageManifest> modelPackageManifestFromJson(const QJsonObje
     manifest.format = readString(root, QStringLiteral("format"));
     manifest.schemaVersion = readInt(root, QStringLiteral("schema_version"));
     manifest.metadata = metadataFromJson(root.value(QStringLiteral("metadata")).toObject());
+    manifest.nativeExecution = nativeExecutionFromJson(root.value(QStringLiteral("native_execution")).toObject());
     manifest.sourceArtifact = readString(root, QStringLiteral("source_artifact"));
 
     const QJsonArray compatibleArray = root.value(QStringLiteral("compatible_engines")).toArray();

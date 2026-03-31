@@ -27,13 +27,13 @@ Current runtime shape:
 - `BackendCapabilities` reports static backend support used for orchestration
 - `RuntimeDiagnostics` reports runtime/device/model inspection data separately
   from static capabilities, including runtime-selection reasoning
+- `RuntimeSelector` chooses between the native CPU and legacy whisper runtime
+  paths based on validated package compatibility markers and build support
 - `RuntimeError` and `RuntimeErrorCode` provide typed runtime failures
 - `ModelCatalog`, `ModelPackage`, and `ModelValidator` own model inspection,
   compatibility checks, and integrity validation before backend load
 - raw Whisper `.bin` files are handled only through an explicit compatibility
   path and import flow
-- `RuntimeSelector` owns runtime-selection policy instead of burying that logic
-  in the generic factory
 - `CpuReferenceModelHandle` and related native model helpers own the current
   product-owned CPU reference model loading boundary
 - `TranscriptionWorker` hosts transcription on a dedicated `QThread` and
@@ -75,7 +75,7 @@ Current product direction:
 - tray-shell work exists, but the daemon remains the product core
 - a product-owned native CPU reference runtime now exists for ownership,
   packaging, and conformance work
-- `whisper.cpp` is still the only real end-user speech decoder today
+- `whisper.cpp` remains the only validated user-facing speech decoder today
 - the vendored runtime is now optional at build time through
   `MUTTERKEY_ENABLE_LEGACY_WHISPER=OFF`
 

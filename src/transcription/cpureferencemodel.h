@@ -1,6 +1,8 @@
 #pragma once
 
 #include "transcription/modelpackage.h"
+#include "transcription/cpudecodergraph.h"
+#include "transcription/cpuwhispertokenizer.h"
 #include "transcription/transcriptionengine.h"
 #include "transcription/transcriptiontypes.h"
 
@@ -8,6 +10,8 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+
+struct CpuWhisperModelWeights;
 
 /**
  * @file
@@ -22,16 +26,82 @@ struct CpuReferenceModelHeader {
     std::array<char, 8> magic{};
     /// Native CPU reference weights format version.
     std::uint32_t version = 0;
-    /// UTF-8 transcript payload size used by the deterministic reference fixture format.
-    std::uint32_t transcriptBytes = 0;
+    /// Version-specific payload field 1.
+    std::uint32_t payloadField1 = 0;
+    /// Version-specific payload field 2.
+    std::uint32_t payloadField2 = 0;
+    /// Version-specific payload field 3.
+    std::uint32_t payloadField3 = 0;
 };
 
 /**
- * @brief Deterministic native CPU reference model payload loaded from disk.
+ * @brief Supported native CPU weights payload shapes.
+ */
+enum class CpuReferenceModelKind : std::uint8_t {
+    FixtureV1,
+    TemplateDecoderScaffoldV2,
+    BaselineFamilyDecoderV2,
+    RealDecoderV3,
+};
+
+/**
+ * @brief Deterministic or template-backed native CPU model payload loaded from disk.
  */
 struct CpuReferenceModelData {
-    /// Final transcript emitted by the deterministic reference runtime fixture.
+    /// Loaded native CPU payload flavor.
+    CpuReferenceModelKind kind = CpuReferenceModelKind::FixtureV1;
+    /// Final transcript emitted by the older deterministic reference fixture format.
     QString transcript;
+    /// Fixed feature profile size used by template-matching models.
+    int featureBinCount = 0;
+    /// Maximum accepted template distance for a successful match.
+    float maxDistance = 0.0F;
+    /// Phrase templates available in a template-matching model.
+    std::vector<CpuDecodedPhraseTemplate> phraseTemplates;
+    /// Optional packaged token vocabulary used for stable token ids.
+    std::vector<QString> tokenVocabulary;
+    /// Optional packaged Whisper-family tokenizer used by real decoder packages.
+    std::optional<CpuWhisperTokenizerModel> whisperTokenizer;
+    /// Loaded tensor weights for the real decoder path (v3).
+    std::shared_ptr<CpuWhisperModelWeights> tensorWeights;
+};
+
+/**
+ * @brief Immutable decoder-facing execution metadata derived from the package manifest.
+ */
+struct CpuReferenceExecutionMetadata {
+    /// Decoder implementation marker.
+    QString decoder;
+    /// Tokenizer contract marker.
+    QString tokenizer;
+    /// Frozen baseline family marker such as `whisper-base-en`.
+    QString baselineFamily;
+    /// Tokenizer asset role declared by the package.
+    QString tokenizerAssetRole;
+    /// Optional tokenizer merge-asset role declared by the package.
+    QString tokenizerMergesAssetRole;
+    /// Frontend contract marker.
+    QString frontend;
+    /// Search-policy contract marker.
+    QString searchPolicy;
+    /// Timestamp-mode contract marker.
+    QString timestampMode;
+    /// Feature-bin count expected by the decoder.
+    int featureBinCount = 0;
+    /// Template count declared by the package manifest.
+    int templateCount = 0;
+    /// Max match distance declared by the package manifest.
+    double maxDistance = 0.0;
+    /// Decoder begin-of-transcript token id.
+    int bosTokenId = -1;
+    /// Decoder end-of-transcript token id.
+    int eosTokenId = -1;
+    /// Decoder no-speech token id.
+    int noSpeechTokenId = -1;
+    /// First timestamp token id.
+    int timestampTokenStartId = -1;
+    /// Last timestamp token id.
+    int timestampTokenEndId = -1;
 };
 
 /**
@@ -53,14 +123,21 @@ public:
     [[nodiscard]] QString modelDescription() const override;
 
     /**
-     * @brief Returns the deterministic transcript fixture embedded in this model.
-     * @return Transcript text emitted by the reference runtime.
+     * @brief Returns the parsed native CPU model payload.
+     * @return Immutable payload used by the session-side decoder.
      */
-    [[nodiscard]] const QString &transcript() const;
+    [[nodiscard]] const CpuReferenceModelData &model() const;
+
+    /**
+     * @brief Returns decoder-facing execution metadata from the validated package.
+     * @return Immutable execution contract used to cross-check payload shape.
+     */
+    [[nodiscard]] const CpuReferenceExecutionMetadata &execution() const;
 
 private:
     ValidatedModelPackage m_package;
     CpuReferenceModelData m_model;
+    CpuReferenceExecutionMetadata m_execution;
     qint64 m_loadTimeMs = 0;
 };
 

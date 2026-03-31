@@ -29,6 +29,12 @@ file(GLOB_RECURSE SOURCE_FILES LIST_DIRECTORIES FALSE
 
 set(failed FALSE)
 foreach(source_file IN LISTS SOURCE_FILES)
+    string(FIND "${compile_commands_json}" "\"file\": \"${source_file}\"" compile_command_index)
+    if(compile_command_index EQUAL -1)
+        message(STATUS "Skipping clazy-standalone for ${source_file} because it is not part of the configured build")
+        continue()
+    endif()
+
     message(STATUS "Running clazy-standalone on ${source_file}")
     execute_process(
         COMMAND "${TOOL_BIN}"
