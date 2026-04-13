@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "skills": {
+    "backend-guidance": {
+      "source": "n-n-code/n-n-code-skills",
+      "sourceType": "github",
+      "computedHash": "35a395395f78ca06cefc7259d13dbbd025459fb9c9957cb25e923e119a16315a"
+    },
+    "backend-systems-guidance": {
+      "source": "n-n-code/n-n-code-skills",
+      "sourceType": "github",
+      "computedHash": "c3c5e1ec416705f8dfe7984b69aab8d949b0a80ad9434222941454a240012235"
+    },
+    "coding-guidance-bash": {
+      "source": "n-n-code/n-n-code-skills",
+      "sourceType": "github",
+      "computedHash": "e02e2afd93a45a008f5b24f57692572b50497bdd2a5db41f6c32ea500ed00813"
+    },
+    "coding-guidance-cpp": {
+      "source": "n-n-code/n-n-code-skills",
+      "sourceType": "github",
+      "computedHash": "9657a2ba9eecdbee8f7619f74055bd77a15ea2ab2b19e6a074bfe632f5781710"
+    },
+    "coding-guidance-python": {
+      "source": "n-n-code/n-n-code-skills",
+      "sourceType": "github",
+      "computedHash": "3f655dede236a2d2b6abb26f3c49cd05b77d1552360ea2e566f5ccd5659b64e0"
+    },
+    "coding-guidance-qt": {
+      "source": "n-n-code/n-n-code-skills",
+      "sourceType": "github",
+      "computedHash": "45a7bd1da45e9d6d1365db3879e581689c7e8921248848e5b1691478376613f5"
+    },
+    "development-contract-process": {
+      "source": "n-n-code/n-n-code-skills",
+      "sourceType": "github",
+      "computedHash": "1542bb3350811ffa6d87813361895c912e55fdd9aaf147fc7a65a9541b9fd607"
+    },
+    "development-contract-repo-overlay-template": {
+      "source": "n-n-code/n-n-code-skills",
+      "sourceType": "github",
+      "computedHash": "09e41b5a232f45f272f50b45c406fbb14f23c33e1773760d1b86f65937069441"
+    },
+    "development-contract-system": {
+      "source": "n-n-code/n-n-code-skills",
+      "sourceType": "github",
+      "computedHash": "c07ea5e25b574fb1a1e1c5798a43fcfe655111f7205428331111354a79c71e12"
+    },
+    "documenter": {
+      "source": "n-n-code/n-n-code-skills",
+      "sourceType": "github",
+      "computedHash": "f27b835841ffe3d6f547f0d828ece8bd3fe31bffb13c09e3c680f54a618fe120"
+    },
+    "documenter-coauthoring": {
+      "source": "n-n-code/n-n-code-skills",
+      "sourceType": "github",
+      "computedHash": "2a2fb5658df28ce4729a1bd8745282e21cdfa64d208f2e576324fb1c7fd0e71f"
+    },
+    "dream-thinking": {
+      "source": "n-n-code/n-n-code-skills",
+      "sourceType": "github",
+      "computedHash": "8a7ff1a7b39e2c8bcf39e384479063f2ac58a197d9656cb85635e11f32ee57e3"
+    },
+    "project-config-and-tests": {
+      "source": "n-n-code/n-n-code-skills",
+      "sourceType": "github",
+      "computedHash": "032f2ac48f8083475e2094c46972a062ccae8e66964560bf899956233c205a71"
+    },
+    "project-core-dev": {
+      "source": "n-n-code/n-n-code-skills",
+      "sourceType": "github",
+      "computedHash": "29141b6f6a036b914da32efaa67cb03be2a17e3b80726fbef5217102287fa443"
+    },
+    "project-platform-diagnose": {
+      "source": "n-n-code/n-n-code-skills",
+      "sourceType": "github",
+      "computedHash": "0552bc432011c0c2fda9717748afbae3f3abd5777917187cbceb81befa2324a2"
+    },
+    "project-release-maintainer": {
+      "source": "n-n-code/n-n-code-skills",
+      "sourceType": "github",
+      "computedHash": "f4d738ad86e3de7a4c63195fe18c6d3eff7290ca3d760bc865400a6ea82d0ba0"
+    },
+    "project-vendor-boundary": {
+      "source": "n-n-code/n-n-code-skills",
+      "sourceType": "github",
+      "computedHash": "9611aa73ad324c6845d5806e106aabfd747c3c767645dad7e8270fdc4d0b3e78"
+    },
+    "recursive-thinking": {
+      "source": "n-n-code/n-n-code-skills",
+      "sourceType": "github",
+      "computedHash": "88a384be43768596afc4bd3f1a7828c69335681cebd87c52a99184df846d0d12"
+    },
+    "security": {
+      "source": "n-n-code/n-n-code-skills",
+      "sourceType": "github",
+      "computedHash": "70c78877b61d1f68fab99845ceef006cd22a52c061d970aeb41a1ae2a17ea745"
+    },
+    "security-identity-access": {
+      "source": "n-n-code/n-n-code-skills",
+      "sourceType": "github",
+      "computedHash": "2a2a6d98441be15f0762bc68f1cca19ebd68186ef80f7c06e4510283a805bb2b"
+    },
+    "thinking": {
+      "source": "n-n-code/n-n-code-skills",
+      "sourceType": "github",
+      "computedHash": "a27bc90d4177b7422b743d69a13bc7227429627c6ccba26430ffb72452925462"
+    },
+    "ui-design-guidance": {
+      "source": "n-n-code/n-n-code-skills",
+      "sourceType": "github",
+      "computedHash": "961d3f37322a70a5b16e5d27df6b9e593df3bf6cd6ce03ad43180760c2eb5dbc"
+    },
+    "ui-guidance": {
+      "source": "n-n-code/n-n-code-skills",
+      "sourceType": "github",
+      "computedHash": "e7218040779e9de25399ec7831769234b767b473b93b2296fa97b4fca98502dd"
+    }
+  }
+}

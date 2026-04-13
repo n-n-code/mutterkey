@@ -43,6 +43,19 @@ Current runtime shape:
 - config parsing under `src/config.*` stays product-shaped and permissive, while
   backend-specific support checks live in the runtime layer
 
+Current source layout:
+
+- `src/asr/runtime/*`: app-owned runtime seam, diagnostics/types, selection
+  policy, and worker-thread orchestration
+- `src/asr/model/*`: package contract, validation, artifact inspection, and
+  raw-Whisper migration helpers
+- `src/asr/streaming/*`: chunking, transcript assembly, and one-shot
+  compatibility wrappers
+- `src/asr/nativecpu/*`: product-owned native CPU model loading and decoder
+  implementation
+- `src/asr/legacy/*`: vendored whisper adapter behind the app-owned runtime
+  seam
+
 Core API surface covered here:
 
 - `HotkeyManager` registers the global push-to-talk shortcut through KDE.
@@ -75,6 +88,8 @@ Current product direction:
 - tray-shell work exists, but the daemon remains the product core
 - a product-owned native CPU reference runtime now exists for ownership,
   packaging, and conformance work
+- the repo source tree is now organized under `src/asr/*` by subdomain instead
+  of one flat transcription directory
 - `whisper.cpp` remains the only validated user-facing speech decoder today
 - the vendored runtime is now optional at build time through
   `MUTTERKEY_ENABLE_LEGACY_WHISPER=OFF`

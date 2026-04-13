@@ -1,0 +1,12 @@
+*
+!.gitignore
+!README.md
+!TEMPLATE.md
+!active/
+!planned/
+!done/
+!superseded/
+!active/*.md
+!planned/*.md
+!done/*.md
+!superseded/*.md

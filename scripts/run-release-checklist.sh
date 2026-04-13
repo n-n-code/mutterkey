@@ -151,6 +151,7 @@ if [[ -n "$tracked_binaries" ]]; then
 fi
 
 run_cmd bash scripts/check-release-hygiene.sh
+run_cmd bash scripts/check-change-contracts.sh
 
 run_cmd cmake -S . -B "$build_dir" "${generator_args[@]}" -DCMAKE_BUILD_TYPE=Debug -DGGML_CCACHE=OFF "${extra_cmake_args[@]}"
 run_build_target "$build_dir" cmake --build "$build_dir" -j"$(nproc)"

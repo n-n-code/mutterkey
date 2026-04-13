@@ -9,11 +9,14 @@ Use this checklist before publishing the repository or cutting a release.
 
 ```bash
 bash scripts/check-release-hygiene.sh
+bash scripts/check-change-contracts.sh
 ```
 
 - Verify there are no machine-specific home-directory paths or absolute local
   Markdown links in tracked files.
 - Confirm `third_party/whisper.cpp` is marked vendored in `.gitattributes`.
+- Confirm contract-bearing `feature_records/<state>/*.md` plans keep explicit lifecycle, responsibilities, evidence matrices, implementation notes, verification notes, and waiver rationale.
+- Confirm `config/change-contract-policy.sh`, `feature_records/README.md`, `feature_records/TEMPLATE.md`, and `scripts/check-change-contracts.sh` still describe the same contract.
 
 ## Licensing And Provenance
 

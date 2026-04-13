@@ -4,7 +4,7 @@
 #include "clipboardwriter.h"
 #include "config.h"
 #include "hotkeymanager.h"
-#include "transcription/transcriptionworker.h"
+#include "asr/runtime/transcriptionworker.h"
 
 #include <QClipboard>
 #include <QJsonObject>

@@ -27,18 +27,18 @@ mutterkey_add_qt_test(recordingnormalizertest
 mutterkey_add_qt_test(streamingtranscriptiontest
     streamingtranscriptiontest.cpp
     ../src/audio/recordingnormalizer.cpp
-    ../src/transcription/audiochunker.cpp
-    ../src/transcription/transcriptassembler.cpp
-    ../src/transcription/transcriptioncompat.cpp
+    ../src/asr/streaming/audiochunker.cpp
+    ../src/asr/streaming/transcriptassembler.cpp
+    ../src/asr/streaming/transcriptioncompat.cpp
 )
 
 mutterkey_add_qt_test(modelpackagetest
     modelpackagetest.cpp
-    ../src/transcription/modelcatalog.cpp
-    ../src/transcription/modelpackage.cpp
-    ../src/transcription/modelvalidator.cpp
-    ../src/transcription/rawwhisperimporter.cpp
-    ../src/transcription/rawwhisperprobe.cpp
+    ../src/asr/model/modelcatalog.cpp
+    ../src/asr/model/modelpackage.cpp
+    ../src/asr/model/modelvalidator.cpp
+    ../src/asr/model/rawwhisperimporter.cpp
+    ../src/asr/model/rawwhisperprobe.cpp
 )
 
 mutterkey_add_qt_test(daemoncontrolprotocoltest
@@ -59,104 +59,104 @@ mutterkey_add_qt_test(daemoncontrolclientservertest
 mutterkey_add_qt_test(transcriptionworkertest
     transcriptionworkertest.cpp
     ../src/audio/recordingnormalizer.cpp
-    ../src/transcription/audiochunker.cpp
-    ../src/transcription/transcriptassembler.cpp
-    ../src/transcription/transcriptioncompat.cpp
-    ../src/transcription/transcriptionworker.cpp
+    ../src/asr/streaming/audiochunker.cpp
+    ../src/asr/streaming/transcriptassembler.cpp
+    ../src/asr/streaming/transcriptioncompat.cpp
+    ../src/asr/runtime/transcriptionworker.cpp
 )
 
 mutterkey_add_qt_test(cpureferencetranscribertest
     cpureferencetranscribertest.cpp
-    ../src/transcription/cpudecoderforward.cpp
-    ../src/transcription/cpudecoderruntime.cpp
-    ../src/transcription/cpudecodergraph.cpp
-    ../src/transcription/cpuencoderforward.cpp
-    ../src/transcription/cpufeatureextractor.cpp
-    ../src/transcription/cpugreedysearch.cpp
-    ../src/transcription/cpumelspectrogram.cpp
-    ../src/transcription/cpumodelweights.cpp
-    ../src/transcription/cpureferencemodel.cpp
-    ../src/transcription/cputensor.cpp
-    ../src/transcription/modelcatalog.cpp
-    ../src/transcription/transcriptionengine.cpp
-    ../src/transcription/modelpackage.cpp
-    ../src/transcription/modelvalidator.cpp
-    ../src/transcription/cpureferencetranscriber.cpp
-    ../src/transcription/cpusessionstate.cpp
-    ../src/transcription/cputokensearch.cpp
-    ../src/transcription/cputokenizer.cpp
-    ../src/transcription/cpuwhispertokenizer.cpp
-    ../src/transcription/cputimestamps.cpp
-    ../src/transcription/rawwhisperprobe.cpp
-    ../src/transcription/runtimeselector.cpp
+    ../src/asr/nativecpu/cpudecoderforward.cpp
+    ../src/asr/nativecpu/cpudecoderruntime.cpp
+    ../src/asr/nativecpu/cpudecodergraph.cpp
+    ../src/asr/nativecpu/cpuencoderforward.cpp
+    ../src/asr/nativecpu/cpufeatureextractor.cpp
+    ../src/asr/nativecpu/cpugreedysearch.cpp
+    ../src/asr/nativecpu/cpumelspectrogram.cpp
+    ../src/asr/nativecpu/cpumodelweights.cpp
+    ../src/asr/nativecpu/cpureferencemodel.cpp
+    ../src/asr/nativecpu/cputensor.cpp
+    ../src/asr/model/modelcatalog.cpp
+    ../src/asr/runtime/transcriptionengine.cpp
+    ../src/asr/model/modelpackage.cpp
+    ../src/asr/model/modelvalidator.cpp
+    ../src/asr/nativecpu/cpureferencetranscriber.cpp
+    ../src/asr/nativecpu/cpusessionstate.cpp
+    ../src/asr/nativecpu/cputokensearch.cpp
+    ../src/asr/nativecpu/cputokenizer.cpp
+    ../src/asr/nativecpu/cpuwhispertokenizer.cpp
+    ../src/asr/nativecpu/cputimestamps.cpp
+    ../src/asr/model/rawwhisperprobe.cpp
+    ../src/asr/runtime/runtimeselector.cpp
 )
 
 mutterkey_add_qt_test(cpudecoderruntimetest
     cpudecoderruntimetest.cpp
-    ../src/transcription/cpudecoderforward.cpp
-    ../src/transcription/cpudecoderruntime.cpp
-    ../src/transcription/cpudecodergraph.cpp
-    ../src/transcription/cpuencoderforward.cpp
-    ../src/transcription/cpufeatureextractor.cpp
-    ../src/transcription/cpugreedysearch.cpp
-    ../src/transcription/cpumelspectrogram.cpp
-    ../src/transcription/cpumodelweights.cpp
-    ../src/transcription/cputensor.cpp
-    ../src/transcription/cputokensearch.cpp
-    ../src/transcription/cputokenizer.cpp
-    ../src/transcription/cpuwhispertokenizer.cpp
-    ../src/transcription/cputimestamps.cpp
+    ../src/asr/nativecpu/cpudecoderforward.cpp
+    ../src/asr/nativecpu/cpudecoderruntime.cpp
+    ../src/asr/nativecpu/cpudecodergraph.cpp
+    ../src/asr/nativecpu/cpuencoderforward.cpp
+    ../src/asr/nativecpu/cpufeatureextractor.cpp
+    ../src/asr/nativecpu/cpugreedysearch.cpp
+    ../src/asr/nativecpu/cpumelspectrogram.cpp
+    ../src/asr/nativecpu/cpumodelweights.cpp
+    ../src/asr/nativecpu/cputensor.cpp
+    ../src/asr/nativecpu/cputokensearch.cpp
+    ../src/asr/nativecpu/cputokenizer.cpp
+    ../src/asr/nativecpu/cpuwhispertokenizer.cpp
+    ../src/asr/nativecpu/cputimestamps.cpp
 )
 
 mutterkey_add_qt_test(cpurealdecodertest
     cpurealdecodertest.cpp
-    ../src/transcription/cpudecoderforward.cpp
-    ../src/transcription/cpudecoderruntime.cpp
-    ../src/transcription/cpudecodergraph.cpp
-    ../src/transcription/cpuencoderforward.cpp
-    ../src/transcription/cpufeatureextractor.cpp
-    ../src/transcription/cpugreedysearch.cpp
-    ../src/transcription/cpumelspectrogram.cpp
-    ../src/transcription/cpumodelweights.cpp
-    ../src/transcription/cputensor.cpp
-    ../src/transcription/cputokensearch.cpp
-    ../src/transcription/cputokenizer.cpp
-    ../src/transcription/cpuwhispertokenizer.cpp
-    ../src/transcription/cputimestamps.cpp
+    ../src/asr/nativecpu/cpudecoderforward.cpp
+    ../src/asr/nativecpu/cpudecoderruntime.cpp
+    ../src/asr/nativecpu/cpudecodergraph.cpp
+    ../src/asr/nativecpu/cpuencoderforward.cpp
+    ../src/asr/nativecpu/cpufeatureextractor.cpp
+    ../src/asr/nativecpu/cpugreedysearch.cpp
+    ../src/asr/nativecpu/cpumelspectrogram.cpp
+    ../src/asr/nativecpu/cpumodelweights.cpp
+    ../src/asr/nativecpu/cputensor.cpp
+    ../src/asr/nativecpu/cputokensearch.cpp
+    ../src/asr/nativecpu/cputokenizer.cpp
+    ../src/asr/nativecpu/cpuwhispertokenizer.cpp
+    ../src/asr/nativecpu/cputimestamps.cpp
 )
 
 mutterkey_add_qt_test(cpuwhispertokenizertest
     cpuwhispertokenizertest.cpp
-    ../src/transcription/cputokenizer.cpp
-    ../src/transcription/cpuwhispertokenizer.cpp
+    ../src/asr/nativecpu/cputokenizer.cpp
+    ../src/asr/nativecpu/cpuwhispertokenizer.cpp
 )
 
 if(MUTTERKEY_ENABLE_LEGACY_WHISPER)
     mutterkey_add_qt_test(whispercpptranscribertest
         whispercpptranscribertest.cpp
-        ../src/transcription/cpudecoderforward.cpp
-        ../src/transcription/cpudecoderruntime.cpp
-        ../src/transcription/cpudecodergraph.cpp
-        ../src/transcription/cpuencoderforward.cpp
-        ../src/transcription/cpufeatureextractor.cpp
-        ../src/transcription/cpugreedysearch.cpp
-        ../src/transcription/cpumelspectrogram.cpp
-        ../src/transcription/cpumodelweights.cpp
-        ../src/transcription/cpureferencemodel.cpp
-        ../src/transcription/cputensor.cpp
-        ../src/transcription/modelcatalog.cpp
-        ../src/transcription/transcriptionengine.cpp
-        ../src/transcription/modelpackage.cpp
-        ../src/transcription/modelvalidator.cpp
-        ../src/transcription/rawwhisperprobe.cpp
-        ../src/transcription/cpureferencetranscriber.cpp
-        ../src/transcription/cpusessionstate.cpp
-        ../src/transcription/cputokensearch.cpp
-        ../src/transcription/cputokenizer.cpp
-        ../src/transcription/cpuwhispertokenizer.cpp
-        ../src/transcription/cputimestamps.cpp
-        ../src/transcription/runtimeselector.cpp
-        ../src/transcription/whispercpptranscriber.cpp
+        ../src/asr/nativecpu/cpudecoderforward.cpp
+        ../src/asr/nativecpu/cpudecoderruntime.cpp
+        ../src/asr/nativecpu/cpudecodergraph.cpp
+        ../src/asr/nativecpu/cpuencoderforward.cpp
+        ../src/asr/nativecpu/cpufeatureextractor.cpp
+        ../src/asr/nativecpu/cpugreedysearch.cpp
+        ../src/asr/nativecpu/cpumelspectrogram.cpp
+        ../src/asr/nativecpu/cpumodelweights.cpp
+        ../src/asr/nativecpu/cpureferencemodel.cpp
+        ../src/asr/nativecpu/cputensor.cpp
+        ../src/asr/model/modelcatalog.cpp
+        ../src/asr/runtime/transcriptionengine.cpp
+        ../src/asr/model/modelpackage.cpp
+        ../src/asr/model/modelvalidator.cpp
+        ../src/asr/model/rawwhisperprobe.cpp
+        ../src/asr/nativecpu/cpureferencetranscriber.cpp
+        ../src/asr/nativecpu/cpusessionstate.cpp
+        ../src/asr/nativecpu/cputokensearch.cpp
+        ../src/asr/nativecpu/cputokenizer.cpp
+        ../src/asr/nativecpu/cpuwhispertokenizer.cpp
+        ../src/asr/nativecpu/cputimestamps.cpp
+        ../src/asr/runtime/runtimeselector.cpp
+        ../src/asr/legacy/whispercpptranscriber.cpp
     )
     target_compile_definitions(whispercpptranscribertest PRIVATE MUTTERKEY_WITH_LEGACY_WHISPER)
     target_link_libraries(whispercpptranscribertest PRIVATE whisper)
@@ -195,3 +195,15 @@ if(TARGET clazy)
         add_dependencies(clazy whispercpptranscribertest_autogen)
     endif()
 endif()
+
+add_test(NAME changecontractcheck
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/test-change-contracts.sh
+)
+
+add_test(NAME featurerecordlifecyclecheck
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/test-feature-record-lifecycle.sh
+)
+
+set_tests_properties(changecontractcheck featurerecordlifecyclecheck PROPERTIES
+    LABELS workflow
+)

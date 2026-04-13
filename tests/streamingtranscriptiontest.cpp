@@ -1,8 +1,8 @@
 #include "audio/recording.h"
 #include "audio/recordingnormalizer.h"
-#include "transcription/audiochunker.h"
-#include "transcription/transcriptassembler.h"
-#include "transcription/transcriptioncompat.h"
+#include "asr/streaming/audiochunker.h"
+#include "asr/streaming/transcriptassembler.h"
+#include "asr/streaming/transcriptioncompat.h"
 
 #include <QAudioFormat>
 #include <QtTest/QTest>

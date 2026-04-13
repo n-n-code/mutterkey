@@ -1,5 +1,5 @@
-#include "transcription/transcriptionengine.h"
-#include "transcription/whispercpptranscriber.h"
+#include "asr/runtime/transcriptionengine.h"
+#include "asr/legacy/whispercpptranscriber.h"
 
 #include <QtTest/QTest>
 

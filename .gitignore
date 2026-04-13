@@ -5,6 +5,7 @@
 /third_party/whisper.cpp/build/
 /third_party/whisper.cpp/build-*/
 /Makefile
+# Legacy planning directory migrated to feature_records/.
 /next_feature/
 *.o
 *.obj

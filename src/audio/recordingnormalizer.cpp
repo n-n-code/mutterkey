@@ -1,7 +1,7 @@
 #include "audio/recordingnormalizer.h"
 
 #include "audio/recording.h"
-#include "transcription/transcriptiontypes.h"
+#include "asr/runtime/transcriptiontypes.h"
 
 #include <QByteArray>
 #include <QLoggingCategory>

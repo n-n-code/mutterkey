@@ -412,26 +412,19 @@ Repository layout:
 - `src/audio/audiorecorder.*`: microphone capture
 - `src/audio/recording.h`: shared recorded-audio payload passed between subsystems
 - `src/audio/recordingnormalizer.*`: conversion to Whisper-ready mono `float32` at `16 kHz`
-- `src/transcription/audiochunker.*`: fixed-size normalized streaming chunk generation
-- `src/transcription/transcriptassembler.*`: final transcript assembly from streaming events
-- `src/transcription/transcriptioncompat.*`: compatibility wrapper from one-shot recordings to the streaming runtime path
-- `src/transcription/modelpackage.*`: product-owned manifest and validated package value types
-- `src/transcription/modelvalidator.*`: package integrity and compatibility validation
-- `src/transcription/modelcatalog.*`: model artifact inspection and resolution
-- `src/transcription/rawwhisperprobe.*`: lightweight raw Whisper header inspection
-- `src/transcription/rawwhisperimporter.*`: migration path from raw Whisper files to native packages
-- `src/transcription/runtimeselector.*`: runtime-selection policy and diagnostic reasons
-- `src/transcription/cpureferencemodel.*`: native CPU model loading boundary
-- `src/transcription/cpureferencetranscriber.*`: product-owned native CPU runtime path
-- `src/transcription/whispercpptranscriber.*`: embedded Whisper integration behind the app-owned runtime seam
-- `src/transcription/transcriptionworker.*`: worker object on a dedicated `QThread`
-- `src/transcription/transcriptiontypes.h`: runtime diagnostics, normalized-audio, chunk, event, and error value types
+- `src/asr/runtime/*`: runtime seam, diagnostics/types, selection policy, and worker-thread orchestration
+- `src/asr/model/*`: package contract, validation, catalog inspection, and raw-Whisper migration helpers
+- `src/asr/streaming/*`: fixed-size chunking, transcript assembly, and one-shot compatibility wrappers
+- `src/asr/nativecpu/*`: product-owned native CPU model loading and decoder pipeline
+- `src/asr/legacy/*`: vendored whisper adapter behind the app-owned runtime seam
 - `src/clipboardwriter.*`: clipboard writes with KDE-first fallback behavior
 - `src/config.*`: JSON config loading and defaults
 - `src/app/*`: shared CLI/runtime command helpers used by the main entrypoint
 - `src/control/*`: local daemon control protocol, typed snapshots, and local-socket session/server wiring
 - `src/tray/*`: Qt Widgets tray-shell UI scaffolding
 - `contrib/mutterkey.service`: example user service
+- `config/change-contract-policy.sh`: repo-local change-contract policy
+- `feature_records/`: lifecycle-grouped feature records and roadmap contracts
 
 Build and test:
 
@@ -499,11 +492,24 @@ Notes for contributors:
 - keep changes targeted to repo-owned code in `src/`, `tests/`, and top-level project files
 - avoid editing `third_party/whisper.cpp` unless the task is specifically about the vendored dependency
 - run `bash scripts/check-release-hygiene.sh` when changing publication-facing files such as this README, licenses, `contrib/`, CI, or test-commentary tooling; it also enforces `WHAT/HOW/WHY` coverage in repo-owned test cases
+- treat substantive repo-owned work as contract-bearing: update a non-template `feature_records/<state>/*.md` plan and run `bash scripts/check-change-contracts.sh`
+- keep verifier evidence concrete in that plan: commands run, observed results, and any contract mismatches
+
+Feature record lifecycle:
+
+```bash
+bash scripts/set-feature-record-lifecycle.sh feature_records/planned/<record>.md active
+bash scripts/set-feature-record-lifecycle.sh feature_records/active/<record>.md done
+bash scripts/set-feature-record-lifecycle.sh \
+  --superseded-by feature_records/done/<replacement>.md \
+  feature_records/active/<record>.md superseded
+```
 
 Release hygiene:
 
 ```bash
 bash scripts/check-release-hygiene.sh
+bash scripts/check-change-contracts.sh
 ```
 
 Vendored `whisper.cpp` updates:

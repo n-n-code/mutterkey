@@ -16,9 +16,29 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve change contract range
+        id: contract_range
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "range=${{ github.event.pull_request.base.sha }}...${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]]; then
+            echo "range=${{ github.event.before }}..${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "range=HEAD^..HEAD" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Run release hygiene checks
+        env:
+          FRAME_CHANGE_CONTRACT_RANGE: ${{ steps.contract_range.outputs.range }}
         run: bash scripts/check-release-hygiene.sh
+
+      - name: Run change contract checks
+        env:
+          FRAME_CHANGE_CONTRACT_RANGE: ${{ steps.contract_range.outputs.range }}
+        run: bash scripts/check-change-contracts.sh
 
   build-test:
     runs-on: ubuntu-24.04

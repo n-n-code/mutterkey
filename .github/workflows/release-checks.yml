@@ -19,6 +19,17 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve change contract range
+        id: contract_range
+        run: |
+          if [[ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]]; then
+            echo "range=${{ github.event.before }}..${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "range=HEAD^..HEAD" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Install build and diagnostics dependencies
         run: |
@@ -40,6 +51,16 @@ jobs:
             qt6-multimedia-dev \
             libkf6globalaccel-dev \
             libkf6guiaddons-dev
+
+      - name: Run release hygiene checks
+        env:
+          FRAME_CHANGE_CONTRACT_RANGE: ${{ steps.contract_range.outputs.range }}
+        run: bash scripts/check-release-hygiene.sh
+
+      - name: Run change contract checks
+        env:
+          FRAME_CHANGE_CONTRACT_RANGE: ${{ steps.contract_range.outputs.range }}
+        run: bash scripts/check-change-contracts.sh
 
       - name: Configure debug build
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug

@@ -1,7 +1,7 @@
-#include "transcription/modelcatalog.h"
-#include "transcription/modelpackage.h"
-#include "transcription/modelvalidator.h"
-#include "transcription/rawwhisperimporter.h"
+#include "asr/model/modelcatalog.h"
+#include "asr/model/modelpackage.h"
+#include "asr/model/modelvalidator.h"
+#include "asr/model/rawwhisperimporter.h"
 
 #include <QCryptographicHash>
 #include <QDir>

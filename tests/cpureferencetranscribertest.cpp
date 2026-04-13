@@ -1,7 +1,7 @@
-#include "transcription/cpufeatureextractor.h"
-#include "transcription/cpureferencetranscriber.h"
-#include "transcription/modelpackage.h"
-#include "transcription/transcriptionengine.h"
+#include "asr/nativecpu/cpufeatureextractor.h"
+#include "asr/nativecpu/cpureferencetranscriber.h"
+#include "asr/model/modelpackage.h"
+#include "asr/runtime/transcriptionengine.h"
 
 #include <QCryptographicHash>
 #include <QDir>

@@ -1,6 +1,6 @@
 #include "audio/recording.h"
-#include "transcription/transcriptionengine.h"
-#include "transcription/transcriptionworker.h"
+#include "asr/runtime/transcriptionengine.h"
+#include "asr/runtime/transcriptionworker.h"
 
 #include <QAudioFormat>
 #include <QSignalSpy>

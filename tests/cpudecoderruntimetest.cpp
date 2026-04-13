@@ -1,9 +1,12 @@
-#include "transcription/cpudecoderruntime.h"
-#include "transcription/cpufeatureextractor.h"
-#include "transcription/cpureferencemodel.h"
-#include "transcription/cputimestamps.h"
+#include "asr/nativecpu/cpudecoderruntime.h"
+#include "asr/nativecpu/cpufeatureextractor.h"
+#include "asr/nativecpu/cpumodelweights.h"
+#include "asr/nativecpu/cpureferencemodel.h"
+#include "asr/nativecpu/cputimestamps.h"
 
 #include <QtTest/QTest>
+
+#include <memory>
 
 namespace {
 
@@ -14,6 +17,7 @@ class CpuDecoderRuntimeTest final : public QObject
 private slots:
     void fixtureModelEmitsTokenizedTranscript();
     void templateModelMatchesAudioProfile();
+    void realDecoderSearchUsesExecutionSpecialTokenIds();
     void timestampTokensDriveFinalEventRange();
 };
 
@@ -39,6 +43,43 @@ std::vector<float> synthesizeSamples(const std::vector<float> &profile)
     }
 
     return samples;
+}
+
+std::shared_ptr<CpuWhisperModelWeights> makeNoSpeechOnlyWeights(int noSpeechTokenId)
+{
+    auto weights = std::make_shared<CpuWhisperModelWeights>();
+    weights->config = CpuModelConfig{
+        .melBands = 1,
+        .audioContextSize = 1500,
+        .audioStateSize = 1,
+        .audioHeadCount = 1,
+        .audioLayerCount = 0,
+        .textContextSize = 4,
+        .textStateSize = 1,
+        .textHeadCount = 1,
+        .textLayerCount = 0,
+        .vocabularySize = 50364,
+    };
+    weights->melFilters = computeMelFilterBank(CpuMelFilterBankSpec{
+        .sampleRate = 16000,
+        .fftSize = 400,
+        .melBands = weights->config.melBands,
+    });
+
+    weights->encoder.conv1Weight = CpuTensor(1, 3);
+    weights->encoder.conv1Bias = CpuTensor(1, 1);
+    weights->encoder.conv2Weight = CpuTensor(1, 3);
+    weights->encoder.conv2Bias = CpuTensor(1, 1);
+    weights->encoder.positionalEmbedding = CpuTensor(1, 1);
+    weights->encoder.lnPostGamma = CpuTensor(1, 1, 1.0F);
+    weights->encoder.lnPostBeta = CpuTensor(1, 1);
+
+    weights->decoder.tokenEmbedding = CpuTensor(weights->config.vocabularySize, 1);
+    weights->decoder.tokenEmbedding.at(noSpeechTokenId, 0) = 20.0F;
+    weights->decoder.positionalEmbedding = CpuTensor(weights->config.textContextSize, 1);
+    weights->decoder.lnGamma = CpuTensor(1, 1, 1.0F);
+    weights->decoder.lnBeta = CpuTensor(1, 1, 1.0F);
+    return weights;
 }
 
 } // namespace
@@ -114,6 +155,38 @@ void CpuDecoderRuntimeTest::templateModelMatchesAudioProfile()
     QCOMPARE(decodeResult.tokens.size(), static_cast<std::size_t>(2));
     QCOMPARE(decodeResult.event.text, QStringLiteral("open editor"));
     QVERIFY(decodeResult.event.endMs > 0);
+}
+
+void CpuDecoderRuntimeTest::realDecoderSearchUsesExecutionSpecialTokenIds()
+{
+    // WHAT: Verify that the real decoder search path consumes special token IDs from package execution metadata.
+    // HOW: Build tiny in-memory tensor weights whose no-speech logit is high only for the metadata-provided token ID.
+    // WHY: Replacing whisper.cpp needs the app-owned package contract to drive runtime behavior instead of hidden Whisper default token IDs.
+    constexpr int kNoSpeechTokenId = 4;
+    const CpuReferenceModelData model{
+        .kind = CpuReferenceModelKind::RealDecoderV3,
+        .tensorWeights = makeNoSpeechOnlyWeights(kNoSpeechTokenId),
+    };
+    CpuKVCache cache;
+    cache.allocate(model.tensorWeights->config, model.tensorWeights->config.textContextSize);
+    const CpuReferenceExecutionMetadata execution{
+        .bosTokenId = 0,
+        .eosTokenId = 1,
+        .noSpeechTokenId = kNoSpeechTokenId,
+        .timestampTokenStartId = 5,
+        .timestampTokenEndId = 7,
+    };
+    const std::vector<float> samples(400, 0.0F);
+
+    const std::optional<CpuDecodeResult> result = runCpuDecodePass(CpuDecodeRequest{
+        .samples = samples,
+        .model = &model,
+        .execution = &execution,
+        .kvCache = &cache,
+        .sampleRate = 16000,
+    });
+
+    QVERIFY(!result.has_value());
 }
 
 void CpuDecoderRuntimeTest::timestampTokensDriveFinalEventRange()

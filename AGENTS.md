@@ -53,42 +53,44 @@ Repository principles:
 - `src/control/*`: local daemon control transport and typed snapshots
 - `src/tray/*`, `src/traymain.cpp`: early tray-shell UI
 - `src/audio/*`: recorder, recording payload, normalization
-- `src/transcription/transcriptionengine.*`: app-owned engine/session seam
-- `src/transcription/transcriptiontypes.h`: core runtime value types
-- `src/transcription/runtimeselector.*`: runtime-selection policy and reasons
-- `src/transcription/cpureferencemodel.*`: native model parsing/loading
-- `src/transcription/cpureferencetranscriber.*`: native CPU reference runtime
-- `src/transcription/cpusessionstate.*`, `cputimestamps.*`: native session
+- `src/asr/runtime/transcriptionengine.*`: app-owned engine/session seam
+- `src/asr/runtime/transcriptiontypes.h`: core runtime value types
+- `src/asr/runtime/runtimeselector.*`: runtime-selection policy and reasons
+- `src/asr/nativecpu/cpureferencemodel.*`: native model parsing/loading
+- `src/asr/nativecpu/cpureferencetranscriber.*`: native CPU reference runtime
+- `src/asr/nativecpu/cpusessionstate.*`, `cputimestamps.*`: native session
   state and transcript timestamp helpers
-- `src/transcription/cputensor.*`: product-owned 2D tensor type and operations
+- `src/asr/nativecpu/cputensor.*`: product-owned 2D tensor type and operations
   for the native CPU runtime
-- `src/transcription/cpumelspectrogram.*`: log-mel spectrogram frontend (FFT,
+- `src/asr/nativecpu/cpumelspectrogram.*`: log-mel spectrogram frontend (FFT,
   Hann window, mel filterbank)
-- `src/transcription/cpumodelweights.*`: MKCPUR3 tensor format loader and
+- `src/asr/nativecpu/cpumodelweights.*`: MKCPUR3 tensor format loader and
   encoder/decoder weight structures
-- `src/transcription/cpuencoderforward.*`: transformer encoder forward pass
-- `src/transcription/cpudecoderforward.*`: transformer decoder forward pass
+- `src/asr/nativecpu/cpuencoderforward.*`: transformer encoder forward pass
+- `src/asr/nativecpu/cpudecoderforward.*`: transformer decoder forward pass
   with incremental KV cache
-- `src/transcription/cpugreedysearch.*`: greedy argmax token generation loop
-- `src/transcription/cputokenizer.*`, `cputokensearch.*`,
+- `src/asr/nativecpu/cpugreedysearch.*`: greedy argmax token generation loop
+- `src/asr/nativecpu/cputokenizer.*`, `cputokensearch.*`,
   `cpudecodergraph.*`, `cpufeatureextractor.*`: staged native decoder helper
   modules
-- `src/transcription/whispercpptranscriber.*`: vendored whisper adapter
-- `src/transcription/modelpackage.*`, `modelvalidator.*`, `modelcatalog.*`:
+- `src/asr/legacy/whispercpptranscriber.*`: vendored whisper adapter
+- `src/asr/model/modelpackage.*`, `modelvalidator.*`, `modelcatalog.*`:
   package contract, validation, artifact inspection
-- `src/transcription/rawwhisperprobe.*`, `rawwhisperimporter.*`: raw-file
+- `src/asr/model/rawwhisperprobe.*`, `rawwhisperimporter.*`: raw-file
   migration path
-- `src/transcription/audiochunker.*`, `transcriptassembler.*`,
-  `transcriptioncompat.*`, `transcriptionworker.*`: streaming helpers,
-  compatibility path, worker-thread orchestration
+- `src/asr/streaming/audiochunker.*`, `transcriptassembler.*`,
+  `transcriptioncompat.*`: streaming helpers and compatibility path
+- `src/asr/runtime/transcriptionworker.*`: worker-thread orchestration
 - `src/config.*`: JSON config loading/defaults
 - `tests/*`: deterministic Qt Test / `CTest` coverage
 - `contrib/mutterkey.service`, `contrib/org.mutterkey.mutterkey.desktop`:
   shipped service/desktop assets
 - `docs/mainpage.md`, `docs/Doxyfile.in`: repo-owned API docs inputs
 - `scripts/check-test-commentary.sh`, `scripts/check-release-hygiene.sh`,
+  `scripts/check-change-contracts.sh`, `scripts/set-feature-record-lifecycle.sh`,
   `scripts/run-valgrind.sh`, `scripts/update-whisper.sh`
-- `next_feature/`: tracked feature plans as Markdown only
+- `config/change-contract-policy.sh`: repo-local source of truth for substantive paths, required sections, evidence lanes, and validation profiles
+- `feature_records/`: tracked feature plans and roadmaps with lifecycle subdirectories; contract-bearing plans use `feature_records/TEMPLATE.md`
 - `third_party/whisper.cpp`: vendored dependency
 - `third_party/whisper.cpp.UPSTREAM.md`: vendor provenance notes
 
@@ -143,6 +145,8 @@ Use the smallest validation set that proves the change, then extend as needed:
   or release-hardening work
 - `bash scripts/check-release-hygiene.sh` for publication-facing files,
   repository metadata, or helper scripts
+- `bash scripts/check-change-contracts.sh` for substantive repo-owned changes
+  that should update a tracked change contract in `feature_records/<state>/`
 
 If install layout, licensing, or shipped assets change, validate a temporary
 install prefix:
@@ -196,14 +200,14 @@ Check installed license files under `share/licenses/mutterkey`.
 
 Runtime- and model-specific guidance:
 
-- Keep runtime-selection policy in `src/transcription/runtimeselector.*`, not
+- Keep runtime-selection policy in `src/asr/runtime/runtimeselector.*`, not
   buried in `createTranscriptionEngine()`
 - Keep static backend support in `BackendCapabilities` and runtime/device/model
   inspection in `RuntimeDiagnostics`
 - Keep `TranscriptionSession` focused on mutable behavior such as warmup, chunk
   ingestion, finish, and cancellation
 - Keep native model parsing/loading separate from mutable session state; prefer
-  `src/transcription/cpureferencemodel.*` or similar app-owned loader code
+  `src/asr/nativecpu/cpureferencemodel.*` or similar app-owned loader code
 - Keep decoder-facing execution metadata in the package contract rather than
   overloading `ModelMetadata`; prefer `manifest.nativeExecution` for native
   decoder/search/frontend/timestamp invariants
@@ -238,7 +242,7 @@ Runtime- and model-specific guidance:
 - `clang-tidy` should only be run on files present in the active build's
   `compile_commands.json`; conditionally built sources such as the legacy
   whisper adapter need a matching configured build or should be skipped
-- When touching `src/transcription/whispercpptranscriber.*` or
+- When touching `src/asr/legacy/whispercpptranscriber.*` or
   `tests/whispercpptranscribertest.cpp`, prefer validating analyzer behavior
   from a legacy-enabled build tree so vendored include paths and generated test
   MOC files are available
@@ -338,10 +342,27 @@ Typical model location:
   behavior changes
 - Keep `README.md`, `AGENTS.md`, and relevant local skills aligned when the
   repo workflow changes
-- Store forward-looking feature plans under `next_feature/` as tracked Markdown
-  files; update the existing plan rather than scattering notes
+- Store forward-looking feature plans under `feature_records/` as tracked Markdown
+  files in lifecycle subdirectories; contract-bearing plans should follow
+  `feature_records/TEMPLATE.md`
+- Treat substantive repo-owned changes in `src/`, `tests/`, `scripts/`, `docs/`,
+  `.github/workflows/`, `cmake/`, `contrib/`, `tools/`, and top-level
+  build/release docs as contract-bearing work that should update a non-template
+  `feature_records/<state>/...` plan unless `config/change-contract-policy.sh`
+  narrows or extends that set
+- Keep contract-plan fields explicit: `missing` evidence states are not
+  acceptable, waived evidence requires rationale, and implementer/verifier
+  identity matches require a self-validation waiver
+- Keep lifecycle state current so active, done, and superseded work can be
+  distinguished explicitly in `feature_records/`
+- Prefer `bash scripts/set-feature-record-lifecycle.sh <record> <state>` when
+  transitioning feature records between lifecycle folders
+- Keep implementation notes owned by the implementer and verification notes
+  owned by the verifier so the plan itself records the responsibility split
+- Keep verifier notes concrete: record commands run, observed results, and any
+  contract mismatches rather than only a summary sentence
 - If a task changes the real status of a tracked phase, update the existing
-  roadmap under `next_feature/` so the recorded phase state matches the repo
+  record under `feature_records/` so the recorded phase state matches the repo
   rather than leaving stale "planned" markers behind
 - Keep architecture evolution incremental: preserve the shipped whisper path
   while moving ownership of interfaces, tests, and packaging toward app-owned

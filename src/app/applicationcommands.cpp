@@ -5,13 +5,13 @@
 #include "audio/recording.h"
 #include "clipboardwriter.h"
 #include "control/daemoncontrolserver.h"
-#include "transcription/modelcatalog.h"
-#include "transcription/modelpackage.h"
-#include "transcription/rawwhisperimporter.h"
+#include "asr/model/modelcatalog.h"
+#include "asr/model/modelpackage.h"
+#include "asr/model/rawwhisperimporter.h"
 #include "service.h"
-#include "transcription/transcriptioncompat.h"
-#include "transcription/transcriptionengine.h"
-#include "transcription/transcriptiontypes.h"
+#include "asr/streaming/transcriptioncompat.h"
+#include "asr/runtime/transcriptionengine.h"
+#include "asr/runtime/transcriptiontypes.h"
 
 #include <QClipboard>
 #include <QCoreApplication>

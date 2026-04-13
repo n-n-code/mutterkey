@@ -1,4 +1,4 @@
-#include "transcription/cpuwhispertokenizer.h"
+#include "asr/nativecpu/cpuwhispertokenizer.h"
 
 #include <QDir>
 #include <QFile>
