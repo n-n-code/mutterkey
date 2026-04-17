@@ -16,7 +16,8 @@
 namespace {
 
 CpuGreedySearchConfig realDecoderSearchConfig(const CpuModelConfig &config,
-                                              const CpuReferenceExecutionMetadata *execution)
+                                              const CpuReferenceExecutionMetadata *execution,
+                                              int maxDecoderTokens)
 {
     CpuGreedySearchConfig searchConfig;
     if (execution != nullptr) {
@@ -25,11 +26,19 @@ CpuGreedySearchConfig realDecoderSearchConfig(const CpuModelConfig &config,
         searchConfig.noSpeechTokenId = execution->noSpeechTokenId;
         searchConfig.timestampBeginId = execution->timestampTokenStartId;
         searchConfig.timestampEndId = execution->timestampTokenEndId;
+        searchConfig.initialPromptTokenIds = execution->initialPromptTokenIds;
+        searchConfig.suppressedTokenIds = execution->suppressedTokenIds;
     }
 
-    constexpr int kInitialPromptTokenCount = 4;
-    const int availableGeneratedTokens = std::max(0, config.textContextSize - kInitialPromptTokenCount);
+    // Prompt footprint: one SOT token plus either the packaged prompt sequence
+    // or the Whisper-en three-token default (language + transcribe + no_timestamps).
+    const int packagedPromptTokenCount = static_cast<int>(searchConfig.initialPromptTokenIds.size());
+    const int initialPromptTokenCount = 1 + (packagedPromptTokenCount > 0 ? packagedPromptTokenCount : 3);
+    const int availableGeneratedTokens = std::max(0, config.textContextSize - initialPromptTokenCount);
     searchConfig.maxDecoderTokens = std::min(searchConfig.maxDecoderTokens, availableGeneratedTokens);
+    if (maxDecoderTokens > 0) {
+        searchConfig.maxDecoderTokens = std::min(searchConfig.maxDecoderTokens, maxDecoderTokens);
+    }
     return searchConfig;
 }
 
@@ -70,19 +79,21 @@ std::optional<CpuDecodeResult> runCpuDecodePass(const CpuDecodeRequest &request)
         }
 
         const CpuWhisperModelWeights &weights = *request.model->tensorWeights;
+        const int maxMelFrames = request.maxMelFrames > 0 ? std::min(request.maxMelFrames, 3000) : 3000;
         const CpuMelConfig melConfig{
             .sampleRate = request.sampleRate,
             .fftSize = 400,
             .hopLength = 160,
             .melBands = weights.config.melBands,
-            .maxFrames = 3000,
+            .maxFrames = maxMelFrames,
         };
 
         const CpuTensor mel = extractLogMelSpectrogram(request.samples, weights.melFilters, melConfig);
         const CpuTensor encoderOutput = runEncoderForward(mel, weights.encoder, weights.config);
 
         request.kvCache->reset();
-        const CpuGreedySearchConfig searchConfig = realDecoderSearchConfig(weights.config, request.execution);
+        const CpuGreedySearchConfig searchConfig =
+            realDecoderSearchConfig(weights.config, request.execution, request.maxDecoderTokens);
 
         CpuGreedySearchResult searchResult = runCpuGreedySearch(encoderOutput, weights, request.kvCache, searchConfig);
         if (!searchResult.isSpeech) {
@@ -96,7 +107,7 @@ std::optional<CpuDecodeResult> runCpuDecodePass(const CpuDecodeRequest &request)
             for (CpuDecodedToken &token : searchResult.tokens) {
                 if (token.kind == CpuDecodedTokenKind::Lexical && token.id >= 0
                     && std::cmp_less(token.id, tokenizerModel.vocabulary.size())) {
-                    token.text = tokenizerModel.vocabulary.at(static_cast<std::size_t>(token.id));
+                    token.text = decodeCpuWhisperTokenText(tokenizerModel.vocabulary.at(static_cast<std::size_t>(token.id)));
                     textParts.append(token.text);
                 }
             }

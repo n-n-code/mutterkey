@@ -205,6 +205,19 @@ Legacy compatibility path:
 ~/.local/share/mutterkey/models/ggml-base.en.bin
 ```
 
+Native CPU backend (no-legacy builds):
+
+For builds configured with `-DMUTTERKEY_ENABLE_LEGACY_WHISPER=OFF`, stage a
+Whisper checkpoint for the app-owned native CPU runtime using the tools in
+`tools/`. See [docs/native-cpu-model-staging.md](docs/native-cpu-model-staging.md)
+for the full walkthrough (HuggingFace download → MKCPUR3 conversion → package
+staging → install).
+
+The native CPU real-decoder path is still under validation. Real-weight
+conformance, legacy parity, and benchmark lanes are developer-only checks gated
+by local model-artifact environment variables; normal `ctest` runs skip them
+when those paths are not set.
+
 ### 3. Create the config file
 
 ```bash
@@ -441,6 +454,29 @@ QT_QPA_PLATFORM=offscreen "$BUILD_DIR/mutterkey" --config "$DIAGNOSE_CONFIG_DIR/
 
 When validating `diagnose`, do not rely on your real `~/.config/mutterkey/config.json`.
 Use an explicit temporary config and model path so the result is deterministic.
+
+Native CPU real-weight validation uses local artifacts outside Git. A typical
+developer run stages a package, then enables the env-gated tests:
+
+```bash
+STAGING_DIR=/path/to/whisper-base-en-staging
+
+python3 tools/stage_native_package.py \
+  --weights "$STAGING_DIR/base-en.mkweights" \
+  --vocab-json "$STAGING_DIR/vocab.json" \
+  --merges "$STAGING_DIR/merges.txt" \
+  --config-json "$STAGING_DIR/config.json" \
+  --baseline whisper-base-en \
+  --output /tmp/mutterkey-packages/whisper-base-en \
+  --force
+
+MUTTERKEY_TEST_WEIGHTS_PATH="$STAGING_DIR/base-en.mkweights" \
+MUTTERKEY_TEST_PACKAGE_PATH=/tmp/mutterkey-packages/whisper-base-en \
+ctest --test-dir "$BUILD_DIR" --output-on-failure -R cpurealdecodertest
+```
+
+Legacy parity additionally requires a legacy-enabled build and
+`MUTTERKEY_TEST_LEGACY_WEIGHTS_PATH` pointing at a local `ggml-base.en.bin`.
 
 Static analysis:
 

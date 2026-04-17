@@ -102,6 +102,10 @@ struct CpuReferenceExecutionMetadata {
     int timestampTokenStartId = -1;
     /// Last timestamp token id.
     int timestampTokenEndId = -1;
+    /// Decoder prompt tokens fed after the begin-of-transcript token.
+    std::vector<int> initialPromptTokenIds;
+    /// Token ids suppressed during generated-token selection.
+    std::vector<int> suppressedTokenIds;
 };
 
 /**

@@ -14,6 +14,7 @@ class CpuWhisperTokenizerTest final : public QObject
 private slots:
     void loadsPackagedTokenizerAssets();
     void tokenizesWhitespaceSeparatedTranscriptWithMerges();
+    void decodesByteLevelWhitespaceMarkersForUserText();
 };
 
 bool writeTextFile(const QString &path, const QByteArray &contents)
@@ -78,6 +79,18 @@ void CpuWhisperTokenizerTest::tokenizesWhitespaceSeparatedTranscriptWithMerges()
     const std::vector<CpuDecodedToken> tokens = tokenizeCpuTranscriptWhisper(QStringLiteral("hello world"), tokenizerModel);
     QVERIFY(!tokens.empty());
     QCOMPARE(tokens.front().text, QStringLiteral("hello"));
+}
+
+void CpuWhisperTokenizerTest::decodesByteLevelWhitespaceMarkersForUserText()
+{
+    // WHAT: Verify that Whisper byte-level whitespace markers are converted before text reaches users.
+    // HOW: Decode raw vocabulary fragments containing the GPT-2 space and newline sentinels.
+    // WHY: Real decoder output should expose normal transcript text rather than packaged tokenizer internals.
+    const QString spaceMarked = QString(QChar(0x0120)) + QStringLiteral("And");
+    const QString newlineMarked = QString(QChar(0x010A)) + QStringLiteral("next");
+
+    QCOMPARE(decodeCpuWhisperTokenText(spaceMarked), QStringLiteral(" And"));
+    QCOMPARE(decodeCpuWhisperTokenText(newlineMarked), QStringLiteral("\nnext"));
 }
 
 QTEST_APPLESS_MAIN(CpuWhisperTokenizerTest)

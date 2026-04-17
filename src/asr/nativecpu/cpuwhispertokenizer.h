@@ -50,6 +50,13 @@ struct CpuWhisperTokenizerModel {
 loadCpuWhisperTokenizerModel(const QString &vocabularyPath, const QString &mergesPath, RuntimeError *error = nullptr);
 
 /**
+ * @brief Converts one Whisper byte-level vocabulary entry into user-facing text.
+ * @param tokenText Raw vocabulary token text such as `\u0120word`.
+ * @return Decoded text fragment suitable for transcript assembly.
+ */
+[[nodiscard]] QString decodeCpuWhisperTokenText(QStringView tokenText);
+
+/**
  * @brief Tokenizes transcript text with the packaged Whisper-family tokenizer.
  * @param text Transcript text to tokenize.
  * @param model Loaded tokenizer model.

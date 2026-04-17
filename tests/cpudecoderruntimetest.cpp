@@ -18,6 +18,7 @@ private slots:
     void fixtureModelEmitsTokenizedTranscript();
     void templateModelMatchesAudioProfile();
     void realDecoderSearchUsesExecutionSpecialTokenIds();
+    void realDecoderSearchHonorsPackagedInitialPromptTokens();
     void timestampTokensDriveFinalEventRange();
 };
 
@@ -187,6 +188,42 @@ void CpuDecoderRuntimeTest::realDecoderSearchUsesExecutionSpecialTokenIds()
     });
 
     QVERIFY(!result.has_value());
+}
+
+void CpuDecoderRuntimeTest::realDecoderSearchHonorsPackagedInitialPromptTokens()
+{
+    // WHAT: Verify that the real decoder search feeds the package-provided prompt sequence instead of the hardcoded Whisper-en default.
+    // HOW: Provide execution metadata with a two-token initial prompt and confirm the KV cache advanced exactly SOT + 2 positions before no-speech early exit.
+    // WHY: Phase 5B moves prompt control into the manifest so non-Whisper-en packages and mixed-language prompts no longer require a runtime code change.
+    constexpr int kNoSpeechTokenId = 4;
+    const CpuReferenceModelData model{
+        .kind = CpuReferenceModelKind::RealDecoderV3,
+        .tensorWeights = makeNoSpeechOnlyWeights(kNoSpeechTokenId),
+    };
+    CpuKVCache cache;
+    cache.allocate(model.tensorWeights->config, model.tensorWeights->config.textContextSize);
+    const CpuReferenceExecutionMetadata execution{
+        .bosTokenId = 0,
+        .eosTokenId = 1,
+        .noSpeechTokenId = kNoSpeechTokenId,
+        .timestampTokenStartId = 5,
+        .timestampTokenEndId = 7,
+        .initialPromptTokenIds = {100, 200},
+    };
+    const std::vector<float> samples(400, 0.0F);
+
+    const std::optional<CpuDecodeResult> result = runCpuDecodePass(CpuDecodeRequest{
+        .samples = samples,
+        .model = &model,
+        .execution = &execution,
+        .kvCache = &cache,
+        .sampleRate = 16000,
+    });
+
+    QVERIFY(!result.has_value());
+    // Prompt consumed should be SOT + the 2 packaged prompt tokens = 3 positions,
+    // not the Whisper-en default of 4 (SOT + language + transcribe + no_timestamps).
+    QCOMPARE(cache.currentPosition, 3);
 }
 
 void CpuDecoderRuntimeTest::timestampTokensDriveFinalEventRange()

@@ -28,6 +28,10 @@ struct CpuDecodeRequest {
     CpuKVCache *kvCache = nullptr;
     /// Expected sample rate for timestamp synthesis.
     int sampleRate = 16000;
+    /// Optional generated-token cap for bounded validation/benchmark passes; 0 keeps the runtime default.
+    int maxDecoderTokens = 0;
+    /// Optional mel-frame cap for short-fixture validation/benchmark passes; 0 keeps the runtime default.
+    int maxMelFrames = 0;
 };
 
 /**

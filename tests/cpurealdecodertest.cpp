@@ -1,23 +1,28 @@
+#include "asr/model/modelpackage.h"
+#include "asr/model/modelvalidator.h"
 #include "asr/nativecpu/cpudecoderforward.h"
-#include "asr/nativecpu/cpuencoderforward.h"
-#include "asr/nativecpu/cpugreedysearch.h"
-#include "asr/nativecpu/cpumelspectrogram.h"
+#include "asr/nativecpu/cpudecoderruntime.h"
 #include "asr/nativecpu/cpumodelweights.h"
+#include "asr/nativecpu/cpureferencemodel.h"
 #include "asr/nativecpu/cpuwhispertokenizer.h"
+#include "testutil/pcmwavreader.h"
 
 #include <QFile>
 #include <QTemporaryFile>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonValue>
 #include <QProcessEnvironment>
+#include <QRegularExpression>
 #include <QtTest/QTest>
 
 #include <array>
 #include <bit>
-#include <cmath>
 #include <initializer_list>
-#include <numbers>
+#include <memory>
+#include <optional>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -32,17 +37,14 @@ private slots:
     void initTestCase();
     void syntheticV3WeightsLoadWithDimensionValidation();
     void pipelineSmokeTest();
+    void pipelineTranscribesJfkSample();
+    void pipelineLoadsStagedPackage();
     void dimensionValidationRejectsWrongShape();
 
 private:
     QString m_weightsPath;
     QString m_modelDir;
-};
-
-struct SineWaveSpec {
-    float durationSeconds = 0.0F;
-    float frequencyHz = 0.0F;
-    float amplitude = 0.0F;
+    QString m_packagePath;
 };
 
 struct TokenizerPaths {
@@ -68,21 +70,6 @@ struct TensorSpec {
     QByteArray name;
     std::vector<quint32> dims;
 };
-
-/**
- * @brief Synthesizes a short 16 kHz audio buffer with a simple sine wave.
- */
-std::vector<float> synthesizeSineWave(int sampleRate, const SineWaveSpec &spec)
-{
-    const auto sampleCount = static_cast<int>(static_cast<float>(sampleRate) * spec.durationSeconds);
-    std::vector<float> samples(static_cast<std::size_t>(sampleCount));
-    constexpr float twoPi = 2.0F * std::numbers::pi_v<float>;
-    for (int i = 0; i < sampleCount; ++i) {
-        const float t = static_cast<float>(i) / static_cast<float>(sampleRate);
-        samples.at(static_cast<std::size_t>(i)) = spec.amplitude * std::sin(twoPi * spec.frequencyHz * t);
-    }
-    return samples;
-}
 
 /**
  * @brief Loads a CpuWhisperTokenizerModel from HuggingFace vocab.json + merges.txt.
@@ -313,6 +300,121 @@ bool writeSyntheticMkcpur3Weights(const QString &path, const SyntheticWeightConf
     return true;
 }
 
+QString runtimeErrorText(const RuntimeError &error)
+{
+    return QStringLiteral("%1: %2").arg(error.message, error.detail);
+}
+
+QString normalizedTranscriptForAssertion(QString text)
+{
+    // Whisper vocab entries use GPT-2 byte-level markers. Convert the common
+    // space/newline sentinels before stripping punctuation for phrase checks.
+    text.replace(QChar(0x0120), QLatin1Char(' '));
+    text.replace(QChar(0x010A), QLatin1Char(' '));
+    text.replace(QStringLiteral("<|endoftext|>"), QLatin1String(" "));
+    text.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9]+")), QStringLiteral(" "));
+    return text.toLower().simplified();
+}
+
+bool containsJfkPhrase(const QString &transcript)
+{
+    return normalizedTranscriptForAssertion(transcript)
+        .contains(QStringLiteral("ask not what your country can do for you"));
+}
+
+std::optional<std::vector<float>> loadJfkSamples(QString *error)
+{
+    const QString wavPath = QString::fromUtf8(MUTTERKEY_TEST_JFK_WAV_PATH);
+    if (!QFileInfo::exists(wavPath)) {
+        if (error != nullptr) {
+            *error = QStringLiteral("JFK WAV fixture not found: %1").arg(wavPath);
+        }
+        return std::nullopt;
+    }
+    return readMono16kHzPcmWav(wavPath, error);
+}
+
+std::vector<int> loadSuppressedTokenIdsFromConfig(const QString &configPath)
+{
+    QFile configFile(configPath);
+    if (!configFile.open(QIODevice::ReadOnly)) {
+        return {};
+    }
+    const QJsonDocument document = QJsonDocument::fromJson(configFile.readAll());
+    if (!document.isObject()) {
+        return {};
+    }
+
+    std::vector<int> tokenIds;
+    const QJsonArray tokens = document.object().value(QStringLiteral("suppress_tokens")).toArray();
+    tokenIds.reserve(static_cast<std::size_t>(tokens.size()));
+    for (const auto &value : tokens) {
+        if (value.isDouble()) {
+            tokenIds.push_back(value.toInt());
+        }
+    }
+    return tokenIds;
+}
+
+CpuReferenceExecutionMetadata whisperBaseEnExecutionMetadata(std::vector<int> suppressedTokenIds = {})
+{
+    return CpuReferenceExecutionMetadata{
+        .decoder = QStringLiteral("real-decoder-v3"),
+        .tokenizer = QStringLiteral("whisper-bpe"),
+        .baselineFamily = QStringLiteral("whisper-base-en"),
+        .tokenizerAssetRole = QStringLiteral("tokenizer_vocab"),
+        .tokenizerMergesAssetRole = QStringLiteral("tokenizer_merges"),
+        .frontend = QStringLiteral("log-mel-v1"),
+        .searchPolicy = QStringLiteral("greedy-real-v1"),
+        .timestampMode = QStringLiteral("timestamp-token-v1"),
+        .bosTokenId = 50257,
+        .eosTokenId = 50256,
+        .noSpeechTokenId = 50361,
+        .timestampTokenStartId = 50363,
+        .timestampTokenEndId = 51863,
+        .initialPromptTokenIds = {50362},
+        .suppressedTokenIds = std::move(suppressedTokenIds),
+    };
+}
+
+std::optional<QString> decodeRealDecoderSamples(const std::vector<float> &samples,
+                                                const std::shared_ptr<CpuWhisperModelWeights> &weights,
+                                                const CpuWhisperTokenizerModel &tokenizer,
+                                                const CpuReferenceExecutionMetadata &execution,
+                                                QString *error)
+{
+    if (weights == nullptr) {
+        if (error != nullptr) {
+            *error = QStringLiteral("Real decoder weights are not loaded");
+        }
+        return std::nullopt;
+    }
+
+    CpuReferenceModelData model;
+    model.kind = CpuReferenceModelKind::RealDecoderV3;
+    model.whisperTokenizer = tokenizer;
+    model.tensorWeights = weights;
+
+    CpuKVCache cache;
+    cache.allocate(weights->config, weights->config.textContextSize);
+    const std::optional<CpuDecodeResult> result = runCpuDecodePass(CpuDecodeRequest{
+        .samples = samples,
+        .model = &model,
+        .execution = &execution,
+        .kvCache = &cache,
+        .sampleRate = 16000,
+        .maxDecoderTokens = 96,
+        .maxMelFrames = 1200,
+    });
+    if (!result.has_value()) {
+        if (error != nullptr) {
+            *error = QStringLiteral("Native real decoder returned no transcript");
+        }
+        return std::nullopt;
+    }
+    return result->transcript;
+}
+
 } // namespace
 
 void CpuRealDecoderTest::initTestCase()
@@ -323,6 +425,7 @@ void CpuRealDecoderTest::initTestCase()
     if (!m_weightsPath.isEmpty()) {
         m_modelDir = QFileInfo(m_weightsPath).absolutePath();
     }
+    m_packagePath = QProcessEnvironment::systemEnvironment().value(QStringLiteral("MUTTERKEY_TEST_PACKAGE_PATH"));
 }
 
 void CpuRealDecoderTest::syntheticV3WeightsLoadWithDimensionValidation()
@@ -348,9 +451,9 @@ void CpuRealDecoderTest::syntheticV3WeightsLoadWithDimensionValidation()
 
 void CpuRealDecoderTest::pipelineSmokeTest()
 {
-    // WHAT: Verify the full native CPU decoder pipeline runs without crashing on real weights.
-    // HOW: Load real MKCPUR3 weights, synthesize audio, run mel->encoder->decoder->greedy search.
-    // WHY: This is the critical end-to-end validation that the tensor pipeline produces tokens from real weights.
+    // WHAT: Verify the real MKCPUR3 base.en weights load with the expected production dimensions.
+    // HOW: Load the external weights from MUTTERKEY_TEST_WEIGHTS_PATH and inspect the parsed tensor metadata.
+    // WHY: The full real-audio conformance tests below cover decoding; this smoke stays cheap enough for local debug builds.
 
     if (m_weightsPath.isEmpty()) {
         QSKIP("MUTTERKEY_TEST_WEIGHTS_PATH not set — skipping real decoder pipeline test");
@@ -368,8 +471,32 @@ void CpuRealDecoderTest::pipelineSmokeTest()
 
     QCOMPARE(weights->config.audioStateSize, 512);
     QCOMPARE(weights->config.vocabularySize, 51864);
+}
 
-    // Load tokenizer for transcript assembly.
+void CpuRealDecoderTest::pipelineTranscribesJfkSample()
+{
+    // WHAT: Verify the real native CPU decoder can transcribe the committed JFK speech fixture with real base.en weights.
+    // HOW: Load MKCPUR3 weights plus tokenizer assets from the staging directory, decode jfk.wav, and assert both raw and normalized canonical phrases.
+    // WHY: Phase 5B needs real short-utterance evidence, not only synthetic tensors or a sine-wave smoke path.
+    if (m_weightsPath.isEmpty()) {
+        QSKIP("MUTTERKEY_TEST_WEIGHTS_PATH not set — skipping real JFK decoder test");
+    }
+    if (!QFileInfo::exists(m_weightsPath)) {
+        QSKIP(qPrintable(QStringLiteral("Weights file not found: %1").arg(m_weightsPath)));
+    }
+
+    QString fixtureError;
+    const std::optional<std::vector<float>> samples = loadJfkSamples(&fixtureError);
+    if (!samples.has_value()) {
+        QFAIL(qPrintable(fixtureError));
+        return;
+    }
+    const std::vector<float> &loadedSamples = samples.value();
+
+    RuntimeError loadError;
+    const std::shared_ptr<CpuWhisperModelWeights> weights = loadCpuWhisperModelWeights(m_weightsPath, &loadError);
+    QVERIFY2(weights != nullptr, qPrintable(runtimeErrorText(loadError)));
+
     const auto tokenizer = loadTokenizerFromHuggingFace(TokenizerPaths{
         .vocabPath = m_modelDir + QStringLiteral("/vocab.json"),
         .mergesPath = m_modelDir + QStringLiteral("/merges.txt"),
@@ -378,57 +505,97 @@ void CpuRealDecoderTest::pipelineSmokeTest()
         QFAIL("Failed to load tokenizer from staging directory");
         return;
     }
-    const CpuWhisperTokenizerModel &loadedTokenizer = *tokenizer;
+    const CpuWhisperTokenizerModel &loadedTokenizer = tokenizer.value();
 
-    // Synthesize a 2-second audio buffer (440 Hz sine wave at moderate amplitude).
-    constexpr int sampleRate = 16000;
-    const std::vector<float> samples = synthesizeSineWave(sampleRate,
-                                                          SineWaveSpec{
-                                                              .durationSeconds = 2.0F,
-                                                              .frequencyHz = 440.0F,
-                                                              .amplitude = 0.3F,
-                                                          });
+    std::vector<int> suppressedTokenIds =
+        loadSuppressedTokenIdsFromConfig(m_modelDir + QStringLiteral("/config.json"));
+    QVERIFY2(!suppressedTokenIds.empty(), "Failed to load suppress_tokens from staging config.json");
 
-    // Run mel spectrogram extraction.
-    const CpuMelConfig melConfig{
-        .sampleRate = sampleRate,
-        .fftSize = 400,
-        .hopLength = 160,
-        .melBands = weights->config.melBands,
-        .maxFrames = 3000,
-    };
-    const CpuTensor mel = extractLogMelSpectrogram(samples, weights->melFilters, melConfig);
-    QCOMPARE(mel.rows, weights->config.melBands);
-    QCOMPARE(mel.cols, 3000);
-
-    // Run encoder.
-    const CpuTensor encoderOutput = runEncoderForward(mel, weights->encoder, weights->config);
-    QCOMPARE(encoderOutput.rows, weights->config.audioContextSize);
-    QCOMPARE(encoderOutput.cols, weights->config.audioStateSize);
-
-    // Allocate KV cache and run greedy search.
-    CpuKVCache cache;
-    cache.allocate(weights->config, 224);
-    const CpuGreedySearchConfig searchConfig{};
-    const CpuGreedySearchResult result = runCpuGreedySearch(encoderOutput, *weights, &cache, searchConfig);
-
-    // A sine wave may or may not produce meaningful speech. What matters is that:
-    // 1. The pipeline ran without crashing.
-    // 2. Tokens were produced (greedy search always produces at least initial prompt tokens).
-    QVERIFY2(!result.tokens.empty(), "Greedy search produced no tokens");
-
-    // If speech was detected, verify we can resolve token text.
-    if (result.isSpeech) {
-        QStringList textParts;
-        for (const CpuDecodedToken &token : result.tokens) {
-            if (token.kind == CpuDecodedTokenKind::Lexical && token.id >= 0
-                && std::cmp_less(token.id, loadedTokenizer.vocabulary.size())) {
-                textParts.append(loadedTokenizer.vocabulary.at(static_cast<std::size_t>(token.id)));
-            }
-        }
-        const QString transcript = textParts.join(QString()).trimmed();
-        qDebug() << "Transcript from sine wave:" << transcript;
+    QString decodeError;
+    const std::optional<QString> transcript = decodeRealDecoderSamples(loadedSamples,
+                                                                        weights,
+                                                                        loadedTokenizer,
+                                                                        whisperBaseEnExecutionMetadata(std::move(suppressedTokenIds)),
+                                                                        &decodeError);
+    if (!transcript.has_value()) {
+        QFAIL(qPrintable(decodeError));
+        return;
     }
+    const QString &decodedTranscript = transcript.value();
+    qDebug().noquote() << "Native JFK transcript:" << decodedTranscript;
+    QVERIFY2(containsJfkPhrase(decodedTranscript),
+             qPrintable(QStringLiteral("Transcript did not contain JFK phrase after normalization: %1")
+                            .arg(normalizedTranscriptForAssertion(decodedTranscript))));
+    QVERIFY2(decodedTranscript.contains(QStringLiteral("And so my fellow Americans")),
+             qPrintable(QStringLiteral("Transcript did not contain the clean JFK opening: %1").arg(decodedTranscript)));
+    QVERIFY2(!decodedTranscript.contains(QChar(0x0120)),
+             qPrintable(QStringLiteral("Transcript leaked byte-level space markers: %1").arg(decodedTranscript)));
+}
+
+void CpuRealDecoderTest::pipelineLoadsStagedPackage()
+{
+    // WHAT: Verify a fully staged native package validates, loads, and decodes the JFK fixture through the production package path.
+    // HOW: Resolve MUTTERKEY_TEST_PACKAGE_PATH with ModelValidator, load CpuReferenceModelHandle, then run one real decode pass.
+    // WHY: The staging helper must produce packages consumed by the runtime loader, not just raw weights accepted by isolated tests.
+    if (m_packagePath.isEmpty()) {
+        QSKIP("MUTTERKEY_TEST_PACKAGE_PATH not set — skipping staged-package decoder test");
+    }
+    if (!QFileInfo::exists(m_packagePath)) {
+        QSKIP(qPrintable(QStringLiteral("Package path not found: %1").arg(m_packagePath)));
+    }
+
+    QString fixtureError;
+    const std::optional<std::vector<float>> samples = loadJfkSamples(&fixtureError);
+    if (!samples.has_value()) {
+        QFAIL(qPrintable(fixtureError));
+        return;
+    }
+    const std::vector<float> &loadedSamples = samples.value();
+
+    RuntimeError validationError;
+    const std::optional<ValidatedModelPackage> package =
+        ModelValidator::validatePackagePath(m_packagePath, cpuReferenceEngineName(), cpuReferenceModelFormat(), &validationError);
+    if (!package.has_value()) {
+        QFAIL(qPrintable(runtimeErrorText(validationError)));
+        return;
+    }
+    const ValidatedModelPackage &validatedPackage = package.value();
+    QCOMPARE(validatedPackage.nativeExecution().decoder, QStringLiteral("real-decoder-v3"));
+    QCOMPARE(validatedPackage.nativeExecution().initialPromptTokenIds.size(), std::size_t{1});
+    QVERIFY(!validatedPackage.nativeExecution().suppressedTokenIds.empty());
+
+    RuntimeError loadError;
+    const std::shared_ptr<const CpuReferenceModelHandle> handle = loadCpuReferenceModelHandle(validatedPackage, &loadError);
+    QVERIFY2(handle != nullptr, qPrintable(runtimeErrorText(loadError)));
+    QCOMPARE(handle->model().kind, CpuReferenceModelKind::RealDecoderV3);
+    QVERIFY(handle->model().tensorWeights != nullptr);
+    QVERIFY(handle->model().whisperTokenizer.has_value());
+
+    CpuKVCache cache;
+    cache.allocate(handle->model().tensorWeights->config, handle->model().tensorWeights->config.textContextSize);
+    const std::optional<CpuDecodeResult> result = runCpuDecodePass(CpuDecodeRequest{
+        .samples = loadedSamples,
+        .model = &handle->model(),
+        .execution = &handle->execution(),
+        .kvCache = &cache,
+        .sampleRate = 16000,
+        .maxDecoderTokens = 96,
+        .maxMelFrames = 1200,
+    });
+
+    if (!result.has_value()) {
+        QFAIL("Staged package produced no JFK transcript");
+        return;
+    }
+    const CpuDecodeResult &decodeResult = result.value();
+    qDebug().noquote() << "Staged package JFK transcript:" << decodeResult.transcript;
+    QVERIFY2(containsJfkPhrase(decodeResult.transcript),
+             qPrintable(QStringLiteral("Package transcript did not contain JFK phrase after normalization: %1")
+                            .arg(normalizedTranscriptForAssertion(decodeResult.transcript))));
+    QVERIFY2(decodeResult.transcript.contains(QStringLiteral("And so my fellow Americans")),
+             qPrintable(QStringLiteral("Package transcript did not contain the clean JFK opening: %1").arg(decodeResult.transcript)));
+    QVERIFY2(!decodeResult.transcript.contains(QChar(0x0120)),
+             qPrintable(QStringLiteral("Package transcript leaked byte-level space markers: %1").arg(decodeResult.transcript)));
 }
 
 void CpuRealDecoderTest::dimensionValidationRejectsWrongShape()

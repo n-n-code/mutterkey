@@ -97,14 +97,33 @@ std::vector<float> hannWindow(int n)
     return window;
 }
 
+// Whisper uses librosa's default ``htk=False`` mel scale (Slaney's auditory
+// toolbox formula): linear below 1 kHz, logarithmic above.
+constexpr float kSlaneyMinLogHz = 1000.0F;
+constexpr float kSlaneyStepHz = 200.0F / 3.0F; // Linear-region slope.
+
+float kSlaneyLogStep()
+{
+    return std::log(6.4F) / 27.0F;
+}
+
 float hzToMel(float hz)
 {
-    return 2595.0F * std::log10(1.0F + (hz / 700.0F));
+    const float linearMel = hz / kSlaneyStepHz;
+    if (hz < kSlaneyMinLogHz) {
+        return linearMel;
+    }
+    const float minLogMel = kSlaneyMinLogHz / kSlaneyStepHz;
+    return minLogMel + (std::log(hz / kSlaneyMinLogHz) / kSlaneyLogStep());
 }
 
 float melToHz(float mel)
 {
-    return 700.0F * (std::pow(10.0F, mel / 2595.0F) - 1.0F);
+    const float minLogMel = kSlaneyMinLogHz / kSlaneyStepHz;
+    if (mel < minLogMel) {
+        return mel * kSlaneyStepHz;
+    }
+    return kSlaneyMinLogHz * std::exp((mel - minLogMel) * kSlaneyLogStep());
 }
 
 } // namespace
@@ -171,7 +190,7 @@ CpuTensor extractLogMelSpectrogram(std::span<const float> samples,
                 (fftReal.at(fftIndex) * fftReal.at(fftIndex)) + (fftImag.at(fftIndex) * fftImag.at(fftIndex));
         }
 
-        // Apply mel filterbank and take log.
+        // Apply mel filterbank and take log10 (matching Whisper's audio.py).
         for (int m = 0; m < config.melBands && m < filters->melBands; ++m) {
             const auto filterOffset = static_cast<IndexType>(m) * static_cast<IndexType>(fftBins);
             float energy = 0.0F;
@@ -179,22 +198,37 @@ CpuTensor extractLogMelSpectrogram(std::span<const float> samples,
                 const auto fftIndex = static_cast<IndexType>(k);
                 energy += filters->filters.at(filterOffset + fftIndex) * powerSpectrum.at(fftIndex);
             }
-            // Log with small epsilon to avoid log(0).
             constexpr float kLogEps = 1e-10F;
-            mel.at(m, frame) = std::log(std::max(energy, kLogEps));
+            mel.at(m, frame) = std::log10(std::max(energy, kLogEps));
         }
     }
 
-    // Whisper-style normalization: clamp to max - 8, then shift/scale to [-1, 1].
+    // Whisper normalization from whisper/audio.py:
+    //   log_spec = max(log_spec, log_spec.max() - 8.0)
+    //   log_spec = (log_spec + 4.0) / 4.0
+    // Only the populated frames participate in the max; unused frames are
+    // clamped to the floor afterwards so the encoder sees silence-like values
+    // for the padded tail.
     float maxVal = -std::numeric_limits<float>::infinity();
-    for (const float v : mel.data) {
-        maxVal = std::max(maxVal, v);
+    for (int m = 0; m < config.melBands; ++m) {
+        for (int t = 0; t < framesToProcess; ++t) {
+            maxVal = std::max(maxVal, mel.at(m, t));
+        }
+    }
+    if (!std::isfinite(maxVal)) {
+        maxVal = 0.0F;
     }
     const float clampMin = maxVal - 8.0F;
-    for (float &v : mel.data) {
-        v = std::max(v, clampMin);
-        v = (v - clampMin) / 8.0F;    // Scale to [0, 1].
-        v = (v * 2.0F) - 1.0F;        // Shift to [-1, 1].
+    const float silenceNormalized = (clampMin + 4.0F) / 4.0F;
+    for (int m = 0; m < config.melBands; ++m) {
+        for (int t = 0; t < config.maxFrames; ++t) {
+            if (t >= framesToProcess) {
+                mel.at(m, t) = silenceNormalized;
+                continue;
+            }
+            const float clamped = std::max(mel.at(m, t), clampMin);
+            mel.at(m, t) = (clamped + 4.0F) / 4.0F;
+        }
     }
 
     return mel;
@@ -207,22 +241,20 @@ CpuMelFilterBank computeMelFilterBank(const CpuMelFilterBankSpec &spec)
     const float melMin = hzToMel(0.0F);
     const float melMax = hzToMel(nyquist);
 
-    // Equally spaced mel points.
+    // Equally spaced mel points on the Slaney mel scale.
     const int numPoints = spec.melBands + 2;
-    std::vector<float> melPoints(static_cast<std::size_t>(numPoints));
+    std::vector<float> hzPoints(static_cast<std::size_t>(numPoints));
     for (int i = 0; i < numPoints; ++i) {
-        melPoints.at(static_cast<IndexType>(i)) =
+        const float mel =
             melMin + ((static_cast<float>(i) * (melMax - melMin)) / static_cast<float>(numPoints - 1));
+        hzPoints.at(static_cast<IndexType>(i)) = melToHz(mel);
     }
 
-    // Convert mel points back to Hz, then to FFT bin indices.
-    std::vector<float> hzPoints(static_cast<std::size_t>(numPoints));
-    std::vector<int> binPoints(static_cast<std::size_t>(numPoints));
-    for (int i = 0; i < numPoints; ++i) {
-        const auto pointIndex = static_cast<IndexType>(i);
-        hzPoints.at(pointIndex) = melToHz(melPoints.at(pointIndex));
-        binPoints.at(pointIndex) = static_cast<int>(std::floor(
-            ((static_cast<float>(spec.fftSize) + 1.0F) * hzPoints.at(pointIndex)) / static_cast<float>(spec.sampleRate)));
+    // FFT bin frequencies (Hz) for the unpadded bins (0..fftBins-1).
+    std::vector<float> fftFreqsHz(static_cast<std::size_t>(fftBins));
+    for (int k = 0; k < fftBins; ++k) {
+        fftFreqsHz.at(static_cast<IndexType>(k)) =
+            (static_cast<float>(k) * static_cast<float>(spec.sampleRate)) / static_cast<float>(spec.fftSize);
     }
 
     CpuMelFilterBank filterBank;
@@ -230,22 +262,22 @@ CpuMelFilterBank computeMelFilterBank(const CpuMelFilterBankSpec &spec)
     filterBank.fftBins = fftBins;
     filterBank.filters.resize(static_cast<std::size_t>(spec.melBands) * fftBins, 0.0F);
 
+    // Construct triangular filters in the Hz domain (librosa parity) and apply
+    // Slaney area normalization: 2 / (hz_right - hz_left).
     for (int m = 0; m < spec.melBands; ++m) {
-        const int left = binPoints.at(static_cast<IndexType>(m));
-        const int center = binPoints.at(static_cast<IndexType>(m) + 1U);
-        const int right = binPoints.at(static_cast<IndexType>(m) + 2U);
+        const float leftHz = hzPoints.at(static_cast<IndexType>(m));
+        const float centerHz = hzPoints.at(static_cast<IndexType>(m) + 1U);
+        const float rightHz = hzPoints.at(static_cast<IndexType>(m) + 2U);
         const auto filterOffset = static_cast<IndexType>(m) * static_cast<IndexType>(fftBins);
+        const float enorm = 2.0F / (rightHz - leftHz);
 
-        for (int k = left; k < center && k < fftBins; ++k) {
-            if (center > left) {
-                filterBank.filters.at(filterOffset + static_cast<IndexType>(k)) =
-                    static_cast<float>(k - left) / static_cast<float>(center - left);
-            }
-        }
-        for (int k = center; k < right && k < fftBins; ++k) {
-            if (right > center) {
-                filterBank.filters.at(filterOffset + static_cast<IndexType>(k)) =
-                    static_cast<float>(right - k) / static_cast<float>(right - center);
+        for (int k = 0; k < fftBins; ++k) {
+            const float f = fftFreqsHz.at(static_cast<IndexType>(k));
+            const float lower = (f - leftHz) / (centerHz - leftHz);
+            const float upper = (rightHz - f) / (rightHz - centerHz);
+            const float value = std::max(0.0F, std::min(lower, upper));
+            if (value > 0.0F) {
+                filterBank.filters.at(filterOffset + static_cast<IndexType>(k)) = value * enorm;
             }
         }
     }

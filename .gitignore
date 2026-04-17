@@ -1,5 +1,6 @@
 /.venv/
 /.cache/
+/.codex
 /build/
 /build-cmake/
 /third_party/whisper.cpp/build/

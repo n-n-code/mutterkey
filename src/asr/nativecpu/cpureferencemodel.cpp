@@ -341,6 +341,8 @@ CpuReferenceModelHandle::CpuReferenceModelHandle(ValidatedModelPackage package, 
           .noSpeechTokenId = m_package.nativeExecution().noSpeechTokenId,
           .timestampTokenStartId = m_package.nativeExecution().timestampTokenStartId,
           .timestampTokenEndId = m_package.nativeExecution().timestampTokenEndId,
+          .initialPromptTokenIds = m_package.nativeExecution().initialPromptTokenIds,
+          .suppressedTokenIds = m_package.nativeExecution().suppressedTokenIds,
       })
     , m_loadTimeMs(loadTimeMs)
 {

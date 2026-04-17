@@ -202,6 +202,9 @@ CpuTensor conv1d(const CpuConv1dRequest &request)
 
     CpuTensor output(outTime, outChannels);
 
+    // PyTorch Conv1d stores weight as [out, in, kernel] row-major; after the
+    // converter flattens to [out, in*kernel] the column index for (ic, k) is
+    // ic*kernelSize + k.
     for (int oc = 0; oc < outChannels; ++oc) {
         const float biasVal = request.bias.at(0, oc);
         for (int t = 0; t < outTime; ++t) {
@@ -213,7 +216,7 @@ CpuTensor conv1d(const CpuConv1dRequest &request)
                     continue;
                 }
                 for (int ic = 0; ic < inChannels; ++ic) {
-                    const int weightCol = (k * inChannels) + ic;
+                    const int weightCol = (ic * request.kernelSize) + k;
                     sum += request.input.at(tIn, ic) * request.weight.at(oc, weightCol);
                 }
             }

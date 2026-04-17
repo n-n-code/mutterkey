@@ -108,12 +108,26 @@ QJsonObject nativeExecutionToJson(const NativeExecutionMetadata &metadata)
     object.insert(QStringLiteral("no_speech_token_id"), metadata.noSpeechTokenId);
     object.insert(QStringLiteral("timestamp_token_start_id"), metadata.timestampTokenStartId);
     object.insert(QStringLiteral("timestamp_token_end_id"), metadata.timestampTokenEndId);
+    if (!metadata.initialPromptTokenIds.empty()) {
+        QJsonArray promptArray;
+        for (const int tokenId : metadata.initialPromptTokenIds) {
+            promptArray.append(tokenId);
+        }
+        object.insert(QStringLiteral("initial_prompt_token_ids"), promptArray);
+    }
+    if (!metadata.suppressedTokenIds.empty()) {
+        QJsonArray suppressedArray;
+        for (const int tokenId : metadata.suppressedTokenIds) {
+            suppressedArray.append(tokenId);
+        }
+        object.insert(QStringLiteral("suppressed_token_ids"), suppressedArray);
+    }
     return object;
 }
 
 NativeExecutionMetadata nativeExecutionFromJson(const QJsonObject &object)
 {
-    return NativeExecutionMetadata{
+    NativeExecutionMetadata metadata{
         .executionVersion = readInt(object, QStringLiteral("execution_version")),
         .baselineFamily = readString(object, QStringLiteral("baseline_family")),
         .decoder = readString(object, QStringLiteral("decoder")),
@@ -132,6 +146,22 @@ NativeExecutionMetadata nativeExecutionFromJson(const QJsonObject &object)
         .timestampTokenStartId = readInt(object, QStringLiteral("timestamp_token_start_id")),
         .timestampTokenEndId = readInt(object, QStringLiteral("timestamp_token_end_id")),
     };
+
+    const QJsonArray promptArray = object.value(QStringLiteral("initial_prompt_token_ids")).toArray();
+    metadata.initialPromptTokenIds.reserve(static_cast<std::size_t>(promptArray.size()));
+    for (const auto &value : promptArray) {
+        if (value.isDouble()) {
+            metadata.initialPromptTokenIds.push_back(value.toInt());
+        }
+    }
+    const QJsonArray suppressedArray = object.value(QStringLiteral("suppressed_token_ids")).toArray();
+    metadata.suppressedTokenIds.reserve(static_cast<std::size_t>(suppressedArray.size()));
+    for (const auto &value : suppressedArray) {
+        if (value.isDouble()) {
+            metadata.suppressedTokenIds.push_back(value.toInt());
+        }
+    }
+    return metadata;
 }
 
 } // namespace

@@ -84,7 +84,7 @@ struct CpuMelFilterBankSpec {
  * @brief Computes a mel filterbank from frequency parameters.
  *
  * Used as a fallback when the model file does not include a pre-computed
- * filterbank. Uses the HTK mel scale.
+ * filterbank. Uses Whisper's Slaney/librosa mel scale and area normalization.
  *
  * @param spec Filterbank synthesis parameters.
  * @return Computed filterbank.

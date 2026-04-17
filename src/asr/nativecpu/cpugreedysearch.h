@@ -31,7 +31,7 @@ struct CpuGreedySearchConfig {
     /// First timestamp token id.
     int timestampBeginId = 50363;
     /// Last timestamp token id (inclusive).
-    int timestampEndId = 51864;
+    int timestampEndId = 51863;
     /// Language token id (English).
     int languageTokenId = 50258;
     /// Transcribe task token id.
@@ -40,6 +40,10 @@ struct CpuGreedySearchConfig {
     int maxDecoderTokens = 224;
     /// Probability threshold for no-speech detection.
     float noSpeechThreshold = 0.6F;
+    /// Prompt tokens fed after SOT. When empty, falls back to language + transcribe + no_timestamps.
+    std::vector<int> initialPromptTokenIds;
+    /// Token ids excluded from generated-token argmax selection.
+    std::vector<int> suppressedTokenIds;
 };
 
 /**
@@ -57,9 +61,9 @@ struct CpuGreedySearchResult {
 /**
  * @brief Runs the greedy token generation loop.
  *
- * Feeds the initial token sequence (SOT + language + transcribe + no_timestamps)
- * into the decoder, then greedily selects the highest-probability token at each
- * step until EOT is produced or the maximum token count is reached.
+ * Feeds SOT plus the packaged initial prompt sequence into the decoder, then
+ * greedily selects the highest-probability token at each step until EOT is
+ * produced or the maximum token count is reached.
  *
  * @param encoderOutput Encoder output of shape (encoderLen, audioState).
  * @param weights Complete model weights.

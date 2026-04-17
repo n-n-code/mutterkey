@@ -19,6 +19,7 @@ option(MUTTERKEY_ENABLE_LEGACY_WHISPER "Build the legacy whisper.cpp runtime for
 option(MUTTERKEY_ENABLE_WHISPER_CUDA "Enable whisper.cpp CUDA backend support (NVIDIA)" OFF)
 option(MUTTERKEY_ENABLE_WHISPER_VULKAN "Enable whisper.cpp Vulkan backend support" OFF)
 option(MUTTERKEY_ENABLE_WHISPER_BLAS "Enable whisper.cpp BLAS CPU acceleration" OFF)
+option(MUTTERKEY_BUILD_NATIVE_CPU_BENCH "Build the native CPU benchmark helper" ON)
 set(MUTTERKEY_WHISPER_BLAS_VENDOR "Generic" CACHE STRING "BLAS vendor passed to whisper.cpp when BLAS acceleration is enabled")
 set_property(CACHE MUTTERKEY_WHISPER_BLAS_VENDOR PROPERTY STRINGS "Generic;OpenBLAS;FLAME;ATLAS;FlexiBLAS;Intel;NVHPC;Apple")
 
@@ -268,6 +269,10 @@ if(MUTTERKEY_ENABLE_LEGACY_WHISPER)
     set_target_properties(whisper ggml PROPERTIES PUBLIC_HEADER "")
 
     target_link_libraries(mutterkey_core PRIVATE whisper)
+endif()
+
+if(MUTTERKEY_BUILD_NATIVE_CPU_BENCH)
+    add_subdirectory(tools/nativecpubench)
 endif()
 
 install(TARGETS mutterkey RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

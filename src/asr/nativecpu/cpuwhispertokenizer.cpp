@@ -194,3 +194,11 @@ tokenizeCpuTranscriptWhisper(QStringView text, const CpuWhisperTokenizerModel &m
 
     return tokens;
 }
+
+QString decodeCpuWhisperTokenText(QStringView tokenText)
+{
+    QString decoded = tokenText.toString();
+    decoded.replace(QChar(0x0120), QLatin1Char(' '));
+    decoded.replace(QChar(0x010A), QLatin1Char('\n'));
+    return decoded;
+}

@@ -28,6 +28,7 @@ private slots:
     void validatorRejectsBaselineDecoderPackageWithoutTokenizerMerges();
     void catalogSupportsLegacyRawWhisperCompatibility();
     void importerCreatesNativePackageFromRawWhisperFile();
+    void nativeExecutionJsonRoundTripsInitialPromptTokens();
 };
 
 template <typename T>
@@ -422,6 +423,68 @@ void ModelPackageTest::importerCreatesNativePackageFromRawWhisperFile()
     QVERIFY(!importedPackage.isLegacyCompatibility());
     QVERIFY(QFileInfo::exists(importedPackage.manifestPath));
     QVERIFY(QFileInfo::exists(importedPackage.weightsPath));
+}
+
+void ModelPackageTest::nativeExecutionJsonRoundTripsInitialPromptTokens()
+{
+    // WHAT: Verify that the native-execution JSON encoder and decoder round-trip the packaged initial prompt sequence.
+    // HOW: Encode a manifest with three prompt tokens, decode it back, and assert the vector survives; then confirm an empty list omits the key and decodes to empty.
+    // WHY: Phase 5B hoists Whisper prompt tokens into the package manifest so the runtime no longer hardcodes language/transcribe/no_timestamps ids.
+    ModelPackageManifest manifest;
+    manifest.format = QStringLiteral("mutterkey.model-package");
+    manifest.schemaVersion = 1;
+    manifest.nativeExecution.executionVersion = 2;
+    manifest.nativeExecution.baselineFamily = QStringLiteral("whisper-base-en");
+    manifest.nativeExecution.decoder = QStringLiteral("real-decoder-v3");
+    manifest.nativeExecution.tokenizer = QStringLiteral("whisper-bpe");
+    manifest.nativeExecution.tokenizerAssetRole = QStringLiteral("tokenizer_vocab");
+    manifest.nativeExecution.tokenizerMergesAssetRole = QStringLiteral("tokenizer_merges");
+    manifest.nativeExecution.frontend = QStringLiteral("log-mel-v1");
+    manifest.nativeExecution.searchPolicy = QStringLiteral("greedy-real-v1");
+    manifest.nativeExecution.timestampMode = QStringLiteral("timestamp-token-v1");
+    manifest.nativeExecution.bosTokenId = 50257;
+    manifest.nativeExecution.eosTokenId = 50256;
+    manifest.nativeExecution.noSpeechTokenId = 50361;
+    manifest.nativeExecution.timestampTokenStartId = 50363;
+    manifest.nativeExecution.timestampTokenEndId = 51863;
+    manifest.nativeExecution.initialPromptTokenIds = {50258, 50358, 50362};
+    manifest.nativeExecution.suppressedTokenIds = {1, 2, 7, 8, 50257};
+
+    const QJsonObject encoded = modelPackageManifestToJson(manifest);
+    QString parseError;
+    const std::optional<ModelPackageManifest> decoded = modelPackageManifestFromJson(encoded, &parseError);
+    if (!decoded.has_value()) {
+        QFAIL(qPrintable(parseError));
+        return;
+    }
+    const ModelPackageManifest &decodedManifest = decoded.value();
+    QCOMPARE(decodedManifest.nativeExecution.initialPromptTokenIds.size(), std::size_t{3});
+    QCOMPARE(decodedManifest.nativeExecution.initialPromptTokenIds.at(0), 50258);
+    QCOMPARE(decodedManifest.nativeExecution.initialPromptTokenIds.at(1), 50358);
+    QCOMPARE(decodedManifest.nativeExecution.initialPromptTokenIds.at(2), 50362);
+    QCOMPARE(decodedManifest.nativeExecution.suppressedTokenIds.size(), std::size_t{5});
+    QCOMPARE(decodedManifest.nativeExecution.suppressedTokenIds.at(2), 7);
+
+    // An empty prompt list must round-trip as an empty vector without a key,
+    // so older manifests without the field keep working.
+    ModelPackageManifest legacy = manifest;
+    legacy.nativeExecution.initialPromptTokenIds.clear();
+    legacy.nativeExecution.suppressedTokenIds.clear();
+    const QJsonObject legacyEncoded = modelPackageManifestToJson(legacy);
+    QVERIFY(!legacyEncoded.value(QStringLiteral("native_execution"))
+                .toObject()
+                .contains(QStringLiteral("initial_prompt_token_ids")));
+    QVERIFY(!legacyEncoded.value(QStringLiteral("native_execution"))
+                .toObject()
+                .contains(QStringLiteral("suppressed_token_ids")));
+    const std::optional<ModelPackageManifest> legacyDecoded = modelPackageManifestFromJson(legacyEncoded, &parseError);
+    if (!legacyDecoded.has_value()) {
+        QFAIL(qPrintable(parseError));
+        return;
+    }
+    const ModelPackageManifest &legacyDecodedManifest = legacyDecoded.value();
+    QVERIFY(legacyDecodedManifest.nativeExecution.initialPromptTokenIds.empty());
+    QVERIFY(legacyDecodedManifest.nativeExecution.suppressedTokenIds.empty());
 }
 
 QTEST_APPLESS_MAIN(ModelPackageTest)
