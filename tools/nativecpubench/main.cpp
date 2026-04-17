@@ -31,6 +31,7 @@ struct BenchArgs {
     int measuredRuns = 3;
     int maxDecoderTokens = 96;
     int maxMelFrames = 1200;
+    bool repoRelativePaths = false;
 };
 
 struct DecodeTiming {
@@ -40,7 +41,7 @@ struct DecodeTiming {
 
 void printUsage(QTextStream &stream)
 {
-    stream << "Usage: nativecpubench --package <dir> --audio <wav> [--warmup N] [--runs M] [--max-tokens N] [--max-mel-frames N]\n";
+    stream << "Usage: nativecpubench --package <dir> --audio <wav> [--warmup N] [--runs M] [--max-tokens N] [--max-mel-frames N] [--repo-relative-paths]\n";
 }
 
 std::optional<QString> optionValue(const QStringList &arguments, const QString &name)
@@ -106,6 +107,7 @@ std::optional<BenchArgs> parseArgs(const QStringList &arguments, QString *error)
         .measuredRuns = *runs,
         .maxDecoderTokens = *maxTokens,
         .maxMelFrames = *maxMelFrames,
+        .repoRelativePaths = arguments.contains(QStringLiteral("--repo-relative-paths")),
     };
 }
 
@@ -400,9 +402,14 @@ int main(int argc, char **argv)
     const qint64 p95Ms = percentile(runMs, 0.95);
     const qint64 rssKiB = peakRssKiB();
 
+    const QString packageJsonPath =
+        args->repoRelativePaths ? args->packagePath : QFileInfo(args->packagePath).absoluteFilePath();
+    const QString audioJsonPath =
+        args->repoRelativePaths ? args->audioPath : QFileInfo(args->audioPath).absoluteFilePath();
+
     QJsonObject resultJson{
-        {QStringLiteral("package"), QFileInfo(args->packagePath).absoluteFilePath()},
-        {QStringLiteral("audio"), QFileInfo(args->audioPath).absoluteFilePath()},
+        {QStringLiteral("package"), packageJsonPath},
+        {QStringLiteral("audio"), audioJsonPath},
         {QStringLiteral("warmup_runs"), args->warmupRuns},
         {QStringLiteral("measured_runs"), args->measuredRuns},
         {QStringLiteral("max_decoder_tokens"), args->maxDecoderTokens},

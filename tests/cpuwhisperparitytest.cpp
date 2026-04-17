@@ -34,8 +34,6 @@ QString runtimeErrorText(const RuntimeError &error)
 
 QString normalizedTranscript(QString text)
 {
-    text.replace(QChar(0x0120), QLatin1Char(' '));
-    text.replace(QChar(0x010A), QLatin1Char(' '));
     text.replace(QStringLiteral("<|endoftext|>"), QLatin1String(" "));
     text.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9]+")), QStringLiteral(" "));
     return text.toLower().simplified();

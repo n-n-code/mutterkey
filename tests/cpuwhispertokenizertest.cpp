@@ -15,6 +15,7 @@ private slots:
     void loadsPackagedTokenizerAssets();
     void tokenizesWhitespaceSeparatedTranscriptWithMerges();
     void decodesByteLevelWhitespaceMarkersForUserText();
+    void decodesFullByteLevelVocabularyIntoUtf8Text();
 };
 
 bool writeTextFile(const QString &path, const QByteArray &contents)
@@ -91,6 +92,33 @@ void CpuWhisperTokenizerTest::decodesByteLevelWhitespaceMarkersForUserText()
 
     QCOMPARE(decodeCpuWhisperTokenText(spaceMarked), QStringLiteral(" And"));
     QCOMPARE(decodeCpuWhisperTokenText(newlineMarked), QStringLiteral("\nnext"));
+}
+
+void CpuWhisperTokenizerTest::decodesFullByteLevelVocabularyIntoUtf8Text()
+{
+    // WHAT: Verify the full inverse GPT-2 bytes_to_unicode mapping produces correct UTF-8 user text.
+    // HOW: Decode vocab fragments covering ASCII punctuation, UTF-8 multi-byte sequences, mixed markers, and out-of-range codepoints.
+    // WHY: Whisper vocab encodes punctuation and non-ASCII via byte-level codepoints; partial decoding leaked bytes into user text on multilingual or punctuation-heavy inputs.
+
+    // ASCII punctuation self-maps: codepoints 0x21..0x7E map to the same byte value.
+    const QString punctuationMarked = QString(QChar(0x0120)) + QStringLiteral(",hello.");
+    QCOMPARE(decodeCpuWhisperTokenText(punctuationMarked), QStringLiteral(" ,hello."));
+
+    // UTF-8 multi-byte: `é` encodes as bytes 0xC3 0xA9; vocab chars `Ã` (U+00C3) + `©` (U+00A9).
+    const QString eAcuteVocab = QString(QChar(0x00C3)) + QChar(0x00A9);
+    QCOMPARE(decodeCpuWhisperTokenText(eAcuteVocab), QString::fromUtf8("\xC3\xA9"));
+
+    // UTF-8 multi-byte: `ñ` encodes as bytes 0xC3 0xB1; vocab chars `Ã` (U+00C3) + `±` (U+00B1).
+    const QString nTildeVocab = QString(QChar(0x00C3)) + QChar(0x00B1);
+    QCOMPARE(decodeCpuWhisperTokenText(nTildeVocab), QString::fromUtf8("\xC3\xB1"));
+
+    // Mixed marker + multi-byte: ` café` from Ġ + c + a + f + Ã + ©.
+    const QString cafeMarked = QString(QChar(0x0120)) + QStringLiteral("caf") + QChar(0x00C3) + QChar(0x00A9);
+    QCOMPARE(decodeCpuWhisperTokenText(cafeMarked), QString::fromUtf8(" caf\xC3\xA9"));
+
+    // Codepoints beyond the byte-level table (CJK here) are preserved verbatim as UTF-8 fallback.
+    const QString outOfRange = QString(QChar(0x4E16)) + QChar(0x754C);
+    QCOMPARE(decodeCpuWhisperTokenText(outOfRange), outOfRange);
 }
 
 QTEST_APPLESS_MAIN(CpuWhisperTokenizerTest)

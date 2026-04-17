@@ -1,9 +1,13 @@
 #include "asr/nativecpu/cpuwhispertokenizer.h"
 
+#include <QByteArray>
 #include <QFile>
 #include <QFileInfo>
 #include <QStringList>
 
+#include <array>
+#include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <utility>
 
@@ -83,6 +87,37 @@ int tokenIdForPiece(QStringView piece, const CpuWhisperTokenizerModel &model)
     const auto it = model.tokenIds.constFind(piece.toString());
     return it != model.tokenIds.cend() ? *it : -1;
 }
+
+// Inverse of GPT-2's bytes_to_unicode: maps codepoints 0x00..0x143 back to raw
+// bytes 0x00..0xFF, with -1 marking codepoints that have no preimage.
+// Whisper tokenizer vocab entries are strings over exactly these 256 codepoints.
+constexpr std::size_t kByteLevelTableSize = 0x144;
+
+constexpr std::array<std::int16_t, kByteLevelTableSize> buildByteLevelToByteTable()
+{
+    std::array<std::int16_t, kByteLevelTableSize> table{};
+    table.fill(-1);
+    for (int codepoint = 0x21; codepoint <= 0x7E; ++codepoint) {
+        table.at(static_cast<std::size_t>(codepoint)) = static_cast<std::int16_t>(codepoint);
+    }
+    for (int codepoint = 0xA1; codepoint <= 0xAC; ++codepoint) {
+        table.at(static_cast<std::size_t>(codepoint)) = static_cast<std::int16_t>(codepoint);
+    }
+    for (int codepoint = 0xAE; codepoint <= 0xFF; ++codepoint) {
+        table.at(static_cast<std::size_t>(codepoint)) = static_cast<std::int16_t>(codepoint);
+    }
+    for (int codepoint = 0x100; codepoint <= 0x120; ++codepoint) {
+        table.at(static_cast<std::size_t>(codepoint)) = static_cast<std::int16_t>(codepoint - 0x100);
+    }
+    table.at(0x121) = 0x7F;
+    for (int codepoint = 0x122; codepoint <= 0x142; ++codepoint) {
+        table.at(static_cast<std::size_t>(codepoint)) = static_cast<std::int16_t>(codepoint - 0x122 + 0x80);
+    }
+    table.at(0x143) = static_cast<std::int16_t>(0xAD);
+    return table;
+}
+
+constexpr auto kByteLevelToByte = buildByteLevelToByteTable();
 
 } // namespace
 
@@ -197,8 +232,15 @@ tokenizeCpuTranscriptWhisper(QStringView text, const CpuWhisperTokenizerModel &m
 
 QString decodeCpuWhisperTokenText(QStringView tokenText)
 {
-    QString decoded = tokenText.toString();
-    decoded.replace(QChar(0x0120), QLatin1Char(' '));
-    decoded.replace(QChar(0x010A), QLatin1Char('\n'));
-    return decoded;
+    QByteArray bytes;
+    bytes.reserve(tokenText.size());
+    for (const QChar character : tokenText) {
+        const auto codepoint = static_cast<std::size_t>(character.unicode());
+        if (codepoint < kByteLevelToByte.size() && kByteLevelToByte.at(codepoint) >= 0) {
+            bytes.append(static_cast<char>(kByteLevelToByte.at(codepoint)));
+        } else {
+            bytes.append(QString(character).toUtf8());
+        }
+    }
+    return QString::fromUtf8(bytes);
 }
